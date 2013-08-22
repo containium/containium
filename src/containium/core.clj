@@ -3,16 +3,10 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.core
-  (:require [clojure.edn :as edn]
+  (:require [containium.cassandra :as cassandra]
+            [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [boxure.core :refer (boxure)]))
-
-
-(defn start-cassandra [config]
-  (println "Starting Cassandra..."))
-
-(defn stop-cassandra [cassandra]
-  (println "Stopping Cassandra..."))
 
 
 (defn start-elastic [config]
@@ -85,8 +79,7 @@
 
 (defn run
   [spec systems]
-  (let [{:keys [config modules resolve-dependencies]} spec
-        boxes (start-boxes spec systems)
+  (let [boxes (start-boxes spec systems)
         boxes (handle-commands spec systems boxes)]
     (stop-boxes boxes)))
 
@@ -94,6 +87,6 @@
 (defn -main
   [& args]
   (let [spec (-> "spec.clj" resource slurp edn/read-string)]
-    (with-systems [[:cassandra start-cassandra stop-cassandra]
+    (with-systems [[:cassandra cassandra/start-cassandra cassandra/stop-cassandra]
                    [:elastic start-elastic stop-elastic]]
       (:config spec) {} (partial run spec))))
