@@ -8,7 +8,9 @@
             [containium.kafka :as kafka]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
-            [boxure.core :refer (boxure)]))
+            [clojure.string :refer (split trim)]
+            [boxure.core :refer (boxure)]
+            [clojure.tools.nrepl.server :as nrepl]))
 
 
 (defn with-systems
@@ -52,13 +54,63 @@
         boxes))))
 
 
+(defmulti handle-command
+  "May return a pair, where the first item is an updated state, and
+  the second item is an updated boxes. If no value is returned, or a
+  value in the pair is nil, then the state and/or boxes are not
+  updated in the command loop."
+  (fn [command args spec state boxes] command))
+
+
+(defmethod handle-command :default
+  [command _ _ _ _]
+  (println "Unknown command:" command)
+  (println "Type 'help' for info on the available commands."))
+
+
+(defmethod handle-command "help"
+  [_ _ _ _ _]
+  (println (str "Available commands are:"
+                "\n shutdown                 - Stops all boxes and systems gracefully."
+                "\n repl <start|stop> [port] - Starts an nREPL at the specified port, or stops the"
+                "\n                            current one, inside the containium.")))
+
+(defmethod handle-command "repl"
+  [_ args spec state _]
+  (let [[action port-str] args]
+    (case action
+      "stop" (if-let [server (:nrepl state)]
+               (do (nrepl/stop-server server)
+                   (println "nREPL server stopped.")
+                   [(dissoc state :nrepl)])
+               (println "No active nREPL server to stop."))
+      "start" (if (:nrepl state)
+                (println "An nREPL server is already running.")
+                (if port-str
+                  (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
+                    (let [server (nrepl/start-server :port port)]
+                      (println "nREPL server started on port" port-str)
+                      [(assoc state :nrepl server)])
+                    (println "Invalid port number:" port-str))
+                  (let [server (nrepl/start-server)]
+                    (println "nREPL server started on port" (:port server))
+                    [(assoc state :nrepl server)])))
+      (println (str "Unknown action '" action "', please use 'start' or 'stop'.")))))
+
+
 (defn handle-commands
   [spec systems boxes]
   ;; Handle commands like starting and stopping modules, and stopping the application.
   ;; This can be done through typing here, updates on the file system, through sockets...
-  (println "Press enter to stop...")
-  (read-line)
-  boxes)
+  (loop [state {}
+         boxes boxes]
+    (print "containium> ")
+    (flush)
+    (let [[command & args] (split (trim (read-line)) #"\s+")]
+      (if (= "shutdown" command)
+        boxes ;; How to shutdown the nREPL for example?
+        (let [[new-state new-boxes] (handle-command command args spec state boxes)]
+          (recur (or new-state state) (or new-boxes boxes)))))))
 
 
 (defn stop-boxes

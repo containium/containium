@@ -9,6 +9,7 @@
             :url "http://mozilla.org/MPL/2.0/"}
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [boxure "0.1.0-SNAPSHOT"]
+                 [org.clojure/tools.nrepl "0.2.3"]
                  [ring "1.2.0"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
                  [org.apache.cassandra/cassandra-all "1.2.8"]
