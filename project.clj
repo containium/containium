@@ -11,5 +11,8 @@
                  [boxure "0.1.0-SNAPSHOT"]
                  [ring "1.2.0"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
-                 [org.apache.cassandra/cassandra-all "1.2.8"]]
+                 [org.apache.cassandra/cassandra-all "1.2.8"]
+                 [org.elasticsearch/elasticsearch "0.90.3"]
+                 [org.scala-lang/scala-library "2.9.2"]
+                 [kafka/core-kafka_2.9.2 "0.7.2"]]
   :main containium.core)

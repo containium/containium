@@ -4,16 +4,11 @@
 
 (ns containium.core
   (:require [containium.cassandra :as cassandra]
+            [containium.elasticsearch :as elastic]
+            [containium.kafka :as kafka]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [boxure.core :refer (boxure)]))
-
-
-(defn start-elastic [config]
-  (println "Starting ElasticSearch..."))
-
-(defn stop-elastic [elastic]
-  (println "Stopping ElasticSearsch..."))
 
 
 (defn with-systems
@@ -87,6 +82,7 @@
 (defn -main
   [& args]
   (let [spec (-> "spec.clj" resource slurp edn/read-string)]
-    (with-systems [[:cassandra cassandra/start-cassandra cassandra/stop-cassandra]
-                   [:elastic start-elastic stop-elastic]]
+    (with-systems [[:cassandra cassandra/start cassandra/stop]
+                   [:elastic elastic/start elastic/stop]
+                   [:kafka kafka/start kafka/stop]]
       (:config spec) {} (partial run spec))))

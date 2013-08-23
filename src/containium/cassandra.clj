@@ -10,7 +10,7 @@
 (defrecord Cassandra [daemon thread])
 
 
-(defn start-cassandra
+(defn start
   "Start a Cassandra instance. Give a config location, for example
   `file:dev-resources/cassandra.yaml`. Returns the Server."
   [config]
@@ -21,19 +21,21 @@
         thread (Thread. #(.activate daemon))]
     (.setDaemon thread true)
     (.start thread)
-    (println "Waiting for Cassandr to be fully started...")
+    (println "Waiting for Cassandra to be fully started...")
     (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
+    (println "Cassandra fully started.")
     (new Cassandra daemon thread)))
 
 
-(defn stop-cassandra
+(defn stop
   "Stop a Cassandra server instance."
   [{:keys [daemon thread] :as cassandra}]
   (println "Stopping embedded Cassandra instance...")
   (.deactivate daemon)
   (.interrupt thread)
-  (println "Waiting for Cassandra to be stopped.")
-  (while (some-> daemon .nativeServer .isRunning) (Thread/sleep 200)))
+  (println "Waiting for Cassandra to be stopped...")
+  (while (some-> daemon .nativeServer .isRunning) (Thread/sleep 200))
+  (println "Embedded Cassandra instance stopped."))
 
 
 (defn running?
