@@ -10,7 +10,13 @@
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
             [boxure.core :refer (boxure)]
-            [clojure.tools.nrepl.server :as nrepl]))
+            [clojure.tools.nrepl.server :as nrepl])
+  (:import [jline.console ConsoleReader]))
+
+
+;;; Globals for nREPL access. A necessary evil.
+
+(def globals (atom {}))
 
 
 (defn with-systems
@@ -33,7 +39,7 @@
   [module resolve-dependencies]
   (try
     (let [box (boxure {:resolve-dependencies resolve-dependencies
-                       :isolate ""}
+                       :isolate "containium.*"}
                       (.getClassLoader clojure.lang.RT)
                       module)]
       ;; Box start logic here.
@@ -84,8 +90,8 @@
                    (println "nREPL server stopped.")
                    [(dissoc state :nrepl)])
                (println "No active nREPL server to stop."))
-      "start" (if (:nrepl state)
-                (println "An nREPL server is already running.")
+      "start" (if-let [server (:nrepl state)]
+                (println "An nREPL server is already running, on port" (:port server))
                 (if port-str
                   (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
                     (let [server (nrepl/start-server :port port)]
@@ -98,19 +104,27 @@
       (println (str "Unknown action '" action "', please use 'start' or 'stop'.")))))
 
 
+(defn shutdown-state
+  [state]
+  (when-let [server (:nrepl state)]
+    (nrepl/stop-server server)
+    (println "nREPL server stopped.")))
+
+
 (defn handle-commands
   [spec systems boxes]
   ;; Handle commands like starting and stopping modules, and stopping the application.
   ;; This can be done through typing here, updates on the file system, through sockets...
-  (loop [state {}
-         boxes boxes]
-    (print "containium> ")
-    (flush)
-    (let [[command & args] (split (trim (read-line)) #"\s+")]
-      (if (= "shutdown" command)
-        boxes ;; How to shutdown the nREPL for example?
-        (let [[new-state new-boxes] (handle-command command args spec state boxes)]
-          (recur (or new-state state) (or new-boxes boxes)))))))
+  (let [jline (ConsoleReader.)]
+    (loop [state {}
+           boxes boxes]
+      (swap! globals assoc :boxes boxes)
+      (let [[command & args] (split (trim (.readLine jline "containium> ")) #"\s+")]
+        (if (= "shutdown" command)
+          (do (shutdown-state state)
+              boxes)
+          (let [[new-state new-boxes] (handle-command command args spec state boxes)]
+            (recur (or new-state state) (or new-boxes boxes))))))))
 
 
 (defn stop-boxes
@@ -126,6 +140,7 @@
 
 (defn run
   [spec systems]
+  (swap! globals assoc :systems systems)
   (let [boxes (start-boxes spec systems)
         boxes (handle-commands spec systems boxes)]
     (stop-boxes boxes)))
@@ -134,7 +149,9 @@
 (defn -main
   [& args]
   (let [spec (-> "spec.clj" resource slurp edn/read-string)]
+    (swap! globals assoc :spec spec)
     (with-systems [[:cassandra cassandra/start cassandra/stop]
                    [:elastic elastic/start elastic/stop]
                    [:kafka kafka/start kafka/stop]]
-      (:config spec) {} (partial run spec))))
+      (:config spec) {} (partial run spec)))
+  (shutdown-agents))
