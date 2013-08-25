@@ -19,7 +19,16 @@
 (def globals (atom {}))
 
 
+;;; Root systems logic.
+
 (defn with-systems
+  "This function starts the root systems for the containium. The
+  `system-components` argument is a sequence of triples, where each
+  triple contains an identifier (likely a keyword) for the root
+  system, the symbol pointing to the start function of the system and
+  a symbol to the stop function of the system. The start function
+  takes the config from spec as an argument, whereas the stop function
+  takes that what the start function returned as an argument."
   [system-components config systems f]
   (if-let [[key start stop] (first system-components)]
     (try
@@ -34,8 +43,10 @@
     (f systems)))
 
 
+;;; Box logic.
 
 (defn start-box
+  "The logic for starting a box."
   [module resolve-dependencies]
   (try
     (let [box (boxure {:resolve-dependencies resolve-dependencies
@@ -49,6 +60,7 @@
 
 
 (defn start-boxes
+  "Starts all the boxes in the specified spec."
   [spec systems]
   (let [{:keys [config modules resolve-dependencies]} spec]
     (loop [modules modules
@@ -60,11 +72,28 @@
         boxes))))
 
 
+(defn stop-boxes
+  "Calls the stop function of all boxes in the specefied boxes map."
+  [boxes]
+  (doseq [[name box] boxes]
+    (try
+      ;; Box stop logic here.
+      (catch Throwable ex
+        (println "Exception while stopping module" name ":" ex)
+        ;; Kill box here?
+        ))))
+
+
+;;; Command loop.
+
 (defmulti handle-command
-  "May return a pair, where the first item is an updated state, and
-  the second item is an updated boxes. If no value is returned, or a
-  value in the pair is nil, then the state and/or boxes are not
-  updated in the command loop."
+  "This multi-method dispatches on the command (the first word in the
+  command string). It receives the arguments, the spec, the current
+  command-loop state and the running boxes map. This method may return
+  a pair, where the first item is an updated state map, and the second
+  item is an updated boxes map. If no value is returned, or a value in
+  the pair is nil, then the state and/or boxes are not updated in the
+  command-loop."
   (fn [command args spec state boxes] command))
 
 
@@ -105,6 +134,8 @@
 
 
 (defn shutdown-state
+  "Go over the current command-loop state, and shutdown anything that
+  needs shutting down when the containium is about to stop."
   [state]
   (when-let [server (:nrepl state)]
     (nrepl/stop-server server)
@@ -112,6 +143,13 @@
 
 
 (defn handle-commands
+  "This functions starts the command loop. It uses the handle-command
+  multi-method for handling the individual commands (except shutdown).
+  See the documentation on the handle-command for more info on this.
+  This function receives the spec, the root systems and a map of
+  started boxes. More boxes may be started from the command loop, or
+  stopped. Therefore, this function returns an updated map of
+  currently running boxes."
   [spec systems boxes]
   ;; Handle commands like starting and stopping modules, and stopping the application.
   ;; This can be done through typing here, updates on the file system, through sockets...
@@ -127,18 +165,13 @@
             (recur (or new-state state) (or new-boxes boxes))))))))
 
 
-(defn stop-boxes
-  [boxes]
-  (doseq [[name box] boxes]
-    (try
-      ;; Box stop logic here.
-      (catch Throwable ex
-        (println "Exception while stopping module" name ":" ex)
-        ;; Kill box here?
-        ))))
-
+;;; The coordinating functions.
 
 (defn run
+  "This function is used for the with-systems function. It is called
+  when all root systems are up and running. Currently it starts the
+  boxes, enters the command loop, and stops the boxes when the command
+  loop exited."
   [spec systems]
   (swap! globals assoc :systems systems)
   (let [boxes (start-boxes spec systems)
