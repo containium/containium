@@ -12,6 +12,7 @@
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
                  [ring "1.2.0"]
+                 [http-kit "2.1.10"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
                  [org.apache.cassandra/cassandra-all "1.2.8"]
                  [org.elasticsearch/elasticsearch "0.90.3"]

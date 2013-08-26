@@ -6,6 +6,7 @@
   (:require [containium.cassandra :as cassandra]
             [containium.elasticsearch :as elastic]
             [containium.kafka :as kafka]
+            [containium.httpkit :as httpkit]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
@@ -87,12 +88,12 @@
 ;;; Command loop.
 
 (defmulti handle-command
-  "This multi-method dispatches on the command (the first word in the
-  command string). It receives the arguments, the spec, the current
-  command-loop state and the running boxes map. This method may return
-  a pair, where the first item is an updated state map, and the second
-  item is an updated boxes map. If no value is returned, or a value in
-  the pair is nil, then the state and/or boxes are not updated in the
+  "This multi-method dispatches on the command argument. It also
+  receives the command arguments, the spec, the current command-loop
+  state and the running boxes map. This method may return a pair,
+  where the first item is an updated state map, and the second item is
+  an updated boxes map. If no value is returned, or a value in the
+  pair is nil, then the state and/or boxes are not updated in the
   command-loop."
   (fn [command args spec state boxes] command))
 
@@ -108,7 +109,9 @@
   (println (str "Available commands are:"
                 "\n shutdown                 - Stops all boxes and systems gracefully."
                 "\n repl <start|stop> [port] - Starts an nREPL at the specified port, or stops the"
-                "\n                            current one, inside the containium.")))
+                "\n                            current one, inside the containium."
+                "\n threads                  - Prints a list of all threads.")))
+
 
 (defmethod handle-command "repl"
   [_ args spec state _]
@@ -131,6 +134,13 @@
                     (println "nREPL server started on port" (:port server))
                     [(assoc state :nrepl server)])))
       (println (str "Unknown action '" action "', please use 'start' or 'stop'.")))))
+
+
+(defmethod handle-command "threads"
+  [_ _ _ _ _]
+  (let [threads (keys (Thread/getAllStackTraces))]
+    (println (apply str "Current threads (" (count threads) ")\n  "
+                    (interpose "\n  " threads)))))
 
 
 (defn shutdown-state
@@ -158,9 +168,9 @@
            boxes boxes]
       (swap! globals assoc :boxes boxes)
       (let [[command & args] (split (trim (.readLine jline "containium> ")) #"\s+")]
-        (if (= "shutdown" command)
-          (do (shutdown-state state)
-              boxes)
+        (case command
+          "" (recur state boxes)
+          "shutdown" (do (shutdown-state state) boxes)
           (let [[new-state new-boxes] (handle-command command args spec state boxes)]
             (recur (or new-state state) (or new-boxes boxes))))))))
 
@@ -185,6 +195,7 @@
     (swap! globals assoc :spec spec)
     (with-systems [[:cassandra cassandra/start cassandra/stop]
                    [:elastic elastic/start elastic/stop]
-                   [:kafka kafka/start kafka/stop]]
+                   [:kafka kafka/start kafka/stop]
+                   [:ring httpkit/start httpkit/stop]]
       (:config spec) {} (partial run spec)))
   (shutdown-agents))
