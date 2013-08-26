@@ -39,23 +39,22 @@
   (and (or (not host-regex)
            (re-matches host-regex))
        (or (not context-path)
-           (.startsWith (:uri request) context-path))))
+           (.startsWith (:uri request) (if (= (last context-path) \/)
+                                         context-path
+                                         (str context-path "/"))))))
+
+
+(defn- handle-request
+  [request app]
+  (when (request-matches (:ring-conf app) request)
+    (boxure/call-in-box (:box app) (:handler-fn app) request)))
 
 
 (defn- make-app
   []
   (let [handler (if-let [apps (seq (vals @apps))]
-                  (let [sorted (sort-apps apps)
-                        fn-form `(fn [~'request]
-                                   (condp request-matches ~'request
-                                     ~@(for [app sorted
-                                             form [(:ring-conf app)
-                                                   (list 'boxure/call-in-box
-                                                         (:box app)
-                                                         (:handler-fn app)
-                                                         'request)]]
-                                         form)))]
-                    (eval fn-form))
+                  (let [sorted (sort-apps apps)]
+                    (fn [request] (some (partial handle-request request) sorted)))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (alter-var-root #'app (constantly handler))))
 
