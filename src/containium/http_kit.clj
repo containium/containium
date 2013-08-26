@@ -64,10 +64,7 @@
 
 (defn- clean-ring-conf
   [ring-conf]
-  (if-let [context-path (:context-path ring-conf)]
-    (assoc ring-conf :context-path
-           (if (= (last context-path) \/) context-path (str context-path "/")))
-    ring-conf))
+  (update-in ring-conf [:context-path] #(when % (if (= (last %) \/) % (str % "/")))))
 
 
 (defn upstart-box
