@@ -45,13 +45,17 @@
 (defn- make-app
   []
   (let [handler (if-let [apps (seq (vals @apps))]
-                  (let [sorted (sort-apps apps)]
-                    (eval `(fn [~'request]
-                             (condp request-matches ~'request
-                              ~@(for [app sorted
-                                      form [(:ring-conf app)
-                                            (list (:handler-fn app) 'request)]]
-                                  form)))))
+                  (let [sorted (sort-apps apps)
+                        fn-form `(fn [~'request]
+                                   (condp request-matches ~'request
+                                     ~@(for [app sorted
+                                             form [(:ring-conf app)
+                                                   (list 'boxure/call-in-box
+                                                         (:box app)
+                                                         (:handler-fn app)
+                                                         'request)]]
+                                         form)))]
+                    (eval fn-form))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (alter-var-root #'app (constantly handler))))
 
