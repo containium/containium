@@ -36,11 +36,10 @@
 
 (defmacro matcher
   [{:keys [host-regex context-path]} uri-sym server-name-sym]
-  (cond (and host-regex context-path) `(and (re-matches ~host-regex ~server-name-sym)
-                                            (.startsWith ~uri-sym ~context-path))
-        host-regex  `(re-matches ~host-regex ~server-name-sym)
-        context-path `(.startsWith ~uri-sym ~context-path)
-        :else true))
+  (let [host-test `(re-matches ~host-regex ~server-name-sym)
+        context-test `(.startsWith ~uri-sym ~context-path)]
+    `(and ~@(remove nil? (list (when host-regex host-test)
+                               (when context-path context-test))))))
 
 
 (defn- make-app
