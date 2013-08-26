@@ -53,11 +53,10 @@
     (let [box (boxure {:resolve-dependencies resolve-dependencies
                        :isolate "containium.*"}
                       (.getClassLoader clojure.lang.RT)
-                      module)
-          mod-conf (-> box :project :boxure)]
+                      module)]
       ;; Box start logic here.
-      (when-let [ring-handler (:ring mod-conf)]
-        (http-kit/assoc-app (:name box) @(boxure/eval box ring-handler)))
+      (when-let [ring-conf (-> box :project :boxure :ring)]
+        (http-kit/upstart-box box))
       box)
     (catch Throwable ex
       (println "Exception while starting module" module ":" ex))))
@@ -79,11 +78,10 @@
 (defn stop-boxes
   "Calls the stop function of all boxes in the specefied boxes map."
   [boxes]
-  (doseq [[name box] boxes
-          :let [mod-conf (-> box :project :boxure)]]
+  (doseq [[name box] boxes]
     (try
-      (when (:ring mod-conf)
-        (http-kit/dissoc-app (:name box)))
+      (when (-> box :project :boxure :ring)
+        (http-kit/remove-box box))
       ;; Box stop logic here.
       (catch Throwable ex
         (println "Exception while stopping module" name ":" ex)
