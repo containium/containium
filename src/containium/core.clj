@@ -6,11 +6,11 @@
   (:require [containium.cassandra :as cassandra]
             [containium.elasticsearch :as elastic]
             [containium.kafka :as kafka]
-            [containium.httpkit :as httpkit]
+            [containium.http-kit :as http-kit]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
-            [boxure.core :refer (boxure)]
+            [boxure.core :refer (boxure) :as boxure]
             [clojure.tools.nrepl.server :as nrepl])
   (:import [jline.console ConsoleReader]))
 
@@ -53,8 +53,11 @@
     (let [box (boxure {:resolve-dependencies resolve-dependencies
                        :isolate "containium.*"}
                       (.getClassLoader clojure.lang.RT)
-                      module)]
+                      module)
+          mod-conf (-> box :project :boxure)]
       ;; Box start logic here.
+      (when-let [ring-handler (:ring mod-conf)]
+        (http-kit/assoc-app (:name box) @(boxure/eval box ring-handler)))
       box)
     (catch Throwable ex
       (println "Exception while starting module" module ":" ex))))
@@ -76,8 +79,11 @@
 (defn stop-boxes
   "Calls the stop function of all boxes in the specefied boxes map."
   [boxes]
-  (doseq [[name box] boxes]
+  (doseq [[name box] boxes
+          :let [mod-conf (-> box :project :boxure)]]
     (try
+      (when (:ring mod-conf)
+        (http-kit/dissoc-app (:name box)))
       ;; Box stop logic here.
       (catch Throwable ex
         (println "Exception while stopping module" name ":" ex)
@@ -196,6 +202,6 @@
     (with-systems [[:cassandra cassandra/start cassandra/stop]
                    [:elastic elastic/start elastic/stop]
                    [:kafka kafka/start kafka/stop]
-                   [:ring httpkit/start httpkit/stop]]
+                   [:http-kit http-kit/start http-kit/stop]]
       (:config spec) {} (partial run spec)))
   (shutdown-agents))

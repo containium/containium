@@ -9,6 +9,6 @@
                   :broker-id "1"
                   :log-dir "target/kafka-log"
                   :zk-connect "localhost:2181"}
-          :httpkit {:port 8080}}
+          :http-kit {:port 8080}}
  :modules []
  :resolve-dependencies true}
