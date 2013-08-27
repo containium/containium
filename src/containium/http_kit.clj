@@ -42,7 +42,8 @@
   "Evaluates to a match form, used by the make-app function."
   [{:keys [host-regex context-path]} uri-sym server-name-sym]
   (let [host-test `(re-matches ~host-regex ~server-name-sym)
-        context-test `(.startsWith ~uri-sym ~context-path)]
+        context-test `(and (.startsWith ~uri-sym ~context-path)
+                           (= (get ~uri-sym ~(count context-path)) \/))]
     `(and ~@(remove nil? (list (when host-regex host-test)
                                (when context-path context-test))))))
 
@@ -58,9 +59,13 @@
                                          ~'server-name (:server-name ~'request)]
                                      (or ~@(for [app sorted]
                                              `(when (matcher ~(:ring-conf app) ~'uri ~'server-name)
-                                                (boxure/call-in-box ~(:box app)
-                                                                    ~(:handler-fn app)
-                                                                    ~'request))))))]
+                                                (boxure/call-in-box
+                                                 ~(:box app)
+                                                 ~(:handler-fn app)
+                                                 ~(if-let [cp (-> app :ring-conf :context-path)]
+                                                    `(update-in ~'request [:uri]
+                                                                #(subs % ~(count cp)))
+                                                    ~'request)))))))]
                     (eval fn-form))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (alter-var-root #'app (constantly handler))))
@@ -71,7 +76,12 @@
 (defn- clean-ring-conf
   "Updates the ring-conf, in order to ensure some properties of the values."
   [ring-conf]
-  (update-in ring-conf [:context-path] #(when % (if (= (last %) \/) % (str % "/")))))
+  (let [result ring-conf
+        result (update-in result [:context-path]
+                          #(when % (if (= (last %) \/) (apply str (butlast %)) %)))
+        result (update-in result [:context-path]
+                          #(when % (if (= (first %) \/) % (str "/" %))))]
+    result))
 
 
 (defn upstart-box
@@ -80,7 +90,7 @@
   configuration. A required key is :handler-sym, which, when evaluated
   inside the box, should be the ring handler function. Optional keys
   are :context-path and :host-regex. The first acts as a filter for
-  the first element(s) in the request URI, for example \"/api/v1/\".
+  the first element(s) in the request URI, for example \"/api/v1\".
   The second is a regular expression, which is matched against the
   server name of the request, for example \".*containium.com\"."
   [{:keys [name project] :as box}]
