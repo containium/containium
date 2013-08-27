@@ -46,20 +46,52 @@
 
 ;;; Box logic.
 
+(defn check-project
+  [project]
+  (->> (list (when-not (:containium project)
+               "Missing :containium configuration in project.clj.")
+             (when-not (-> project :containium :start)
+               "Missing :start configuration in :containium of project.clj.")
+             (when-not (-> project :containium :stop)
+               "Missing :stop configuration in :containium of project.clj.")
+             (when (-> project :containium :ring)
+               (when-not (-> project :containium :ring :handler-sym)
+                 "Missing :handler-sym configuration in :ring of :containium of project.clj.")))
+       (remove nil?)))
+
+
+;;--- FIXME: Check for (and allow somehow?) for duplicates.
+
 (defn start-box
   "The logic for starting a box."
-  [module resolve-dependencies]
+  [module resolve-dependencies root-config]
+  (println "Starting module" module "...")
   (try
-    (let [box (boxure {:resolve-dependencies resolve-dependencies
-                       :isolate "containium.*"}
-                      (.getClassLoader clojure.lang.RT)
-                      module)]
-      ;; Box start logic here.
-      (when-let [ring-conf (-> box :project :containium :ring)]
-        (http-kit/upstart-box box))
-      box)
+    (let [project (boxure/jar-project module)]
+      (if-let [errors (seq (check-project project))]
+        (apply println "Could not start module" (:name project) "for the following reasons:\n  "
+               (interpose "\n  " errors))
+        (let [box (boxure {:resolve-dependencies resolve-dependencies
+                           :isolate "containium.*"}
+                          (.getClassLoader clojure.lang.RT)
+                          module)
+              module-config (:containium project)
+              start-result @(boxure/eval box
+                                         `(do (require '~(symbol (namespace (:start module-config))))
+                                              (~(:start module-config) ~root-config)))]
+          (if (instance? Throwable start-result)
+            (do (boxure/clean-and-stop box)
+                (throw start-result))
+            (try
+              (when (:ring module-config) (http-kit/upstart-box box))
+              (println "Module" (:name box) "started.")
+              (assoc box :start-result start-result)
+              (catch Throwable ex
+                (boxure/clean-and-stop box)
+                (throw ex)))))))
     (catch Throwable ex
-      (println "Exception while starting module" module ":" ex))))
+      (println "Exception while starting module" module ":" ex)
+      (.printStackTrace ex))))
 
 
 (defn start-boxes
@@ -69,24 +101,39 @@
     (loop [modules modules
            boxes {}]
       (if-let [module (first modules)]
-        (if-let [result (start-box module resolve-dependencies)]
+        (if-let [result (start-box module resolve-dependencies config)]
           (recur (rest modules) (assoc boxes (:name result) result))
           (recur (rest modules) boxes))
         boxes))))
 
 
+(defn stop-box
+  [box]
+  (let [name (:name box)
+        module-config (-> box :project :containium)]
+    (println "Stopping module" name "...")
+    (try
+      (when (:ring module-config) (http-kit/remove-box box))
+      (let [stop-result @(boxure/eval box
+                                      `(do (require '~(symbol (namespace (:stop module-config))))
+                                           (~(:stop module-config) ~(:start-result box))))]
+        (when (instance? Throwable stop-result)
+          (println "Module" name "reported exception when stopping:" stop-result)))
+      (catch Throwable ex
+        (println "Exception while stopping module" name ":" ex)
+        (.printStackTrace ex)
+        ;; Kill box here?
+        )
+      (finally
+        (boxure/clean-and-stop box)
+        (println "Module" name "stopped.")))))
+
+
 (defn stop-boxes
   "Calls the stop function of all boxes in the specefied boxes map."
   [boxes]
-  (doseq [[name box] boxes]
-    (try
-      (when (-> box :project :containium :ring)
-        (http-kit/remove-box box))
-      ;; Box stop logic here.
-      (catch Throwable ex
-        (println "Exception while stopping module" name ":" ex)
-        ;; Kill box here?
-        ))))
+  (doseq [box (vals boxes)]
+    (stop-box box)))
 
 
 ;;; Command loop.
@@ -111,10 +158,19 @@
 (defmethod handle-command "help"
   [_ _ _ _ _]
   (println (str "Available commands are:"
-                "\n shutdown                 - Stops all boxes and systems gracefully."
-                "\n repl <start|stop> [port] - Starts an nREPL at the specified port, or stops the"
-                "\n                            current one, inside the containium."
-                "\n threads                  - Prints a list of all threads.")))
+                "\n"
+                "\n module <list|start|stop> [path|name]"
+                "\n   Prints a list of running modules."
+                "\n"
+                "\n repl <start|stop> [port]"
+                "\n   Starts an nREPL at the specified port, or stops the current one, inside"
+                "\n   the containium."
+                "\n"
+                "\n shutdown"
+                "\n   Stops all boxes and systems gracefully."
+                "\n"
+                "\n threads"
+                "\n   Prints a list of all threads.")))
 
 
 (defmethod handle-command "repl"
@@ -143,8 +199,28 @@
 (defmethod handle-command "threads"
   [_ _ _ _ _]
   (let [threads (keys (Thread/getAllStackTraces))]
-    (println (apply str "Current threads (" (count threads) ")\n  "
+    (println (apply str "Current threads (" (count threads) "):\n  "
                     (interpose "\n  " threads)))))
+
+
+(defmethod handle-command "module"
+  [_ args spec _ boxes]
+  (let [[action arg] args]
+    (case action
+      "list" (println (apply str "Current modules (" (count boxes) "):\n  "
+                             (interpose "\n  " (keys boxes))))
+      "start" (let [{:keys [config resolve-dependencies]} spec]
+                (if arg
+                  (when-let [box (start-box arg resolve-dependencies config)]
+                    [nil (assoc boxes (:name box) box)])
+                  (println "Missing path argument.")))
+      "stop" (if arg
+               (if-let [box (boxes arg)]
+                 (do (stop-box box)
+                     [nil (dissoc boxes arg)])
+                 (println "Unknown module:" arg))
+               (println "Missing name argument."))
+      (println (str "Unknown action '" action "', please use 'list', 'start' or 'stop'.")))))
 
 
 (defn shutdown-state
