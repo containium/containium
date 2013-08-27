@@ -10,5 +10,5 @@
                   :log-dir "target/kafka-log"
                   :zk-connect "localhost:2181"}
           :http-kit {:port 8080}}
- :modules []
+ :modules ["dev-resources/test-module/target/test-module-0.1.jar"]
  :resolve-dependencies true}
