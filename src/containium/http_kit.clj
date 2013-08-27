@@ -53,20 +53,22 @@
   registered RingApps."
   []
   (let [handler (if-let [apps (seq (vals @apps))]
-                  (let [sorted (sort-apps apps)
-                        fn-form `(fn [~'request]
+                  (let [sorted (vec (sort-apps apps))
+                        fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
                                          ~'server-name (:server-name ~'request)]
-                                     (or ~@(for [app sorted]
+                                     (or ~@(for [index (range (count sorted))
+                                                 :let [app (get sorted index)]]
                                              `(when (matcher ~(:ring-conf app) ~'uri ~'server-name)
-                                                (boxure/call-in-box
-                                                 ~(:box app)
-                                                 ~(:handler-fn app)
-                                                 ~(if-let [cp (-> app :ring-conf :context-path)]
-                                                    `(update-in ~'request [:uri]
-                                                                #(subs % ~(count cp)))
-                                                    ~'request)))))))]
-                    (eval fn-form))
+                                                (let [~'app (get ~'sorted ~index)]
+                                                  (boxure/call-in-box
+                                                   (:box ~'app)
+                                                   (:handler-fn ~'app)
+                                                   ~(if-let [cp (-> app :ring-conf :context-path)]
+                                                      `(update-in ~'request [:uri]
+                                                                  #(subs % ~(count cp)))
+                                                      'request))))))))]
+                    (partial (eval fn-form) sorted))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (alter-var-root #'app (constantly handler))))
 
@@ -94,17 +96,22 @@
   The second is a regular expression, which is matched against the
   server name of the request, for example \".*containium.com\"."
   [{:keys [name project] :as box}]
+  (println "Adding ring handler in module" name "...")
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
-        handler-fn (boxure/eval box (:handler-sym ring-conf))]
+        handler-fn @(boxure/eval box (:handler-sym ring-conf))]
     (swap! apps assoc name (RingApp. box handler-fn ring-conf))
-    (make-app)))
+    (make-app)
+    (println "Ring handler for module" name "added, in context:"
+             (or (:context-path ring-conf) "/"))))
 
 
 (defn remove-box
   "Removes a box's ring handler from the ring server."
   [{name :name}]
+  (println "Removing ring handler of" name "module...")
   (swap! apps dissoc name)
-  (make-app))
+  (make-app)
+  (println "Ring handler of module" name "removed."))
 
 
 ;;; Ring server management.
