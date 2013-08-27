@@ -13,9 +13,9 @@
 
 (defrecord RingApp [box handler-fn ring-conf])
 
-(def apps (atom {}))
+(defonce apps (atom {}))
 
-(def ^:private app nil)
+(defonce ^:private app nil)
 
 
 ;;; Overall ring handler creation.

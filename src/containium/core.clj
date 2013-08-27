@@ -17,7 +17,7 @@
 
 ;;; Globals for nREPL access. A necessary evil.
 
-(def globals (atom {}))
+(defonce globals (atom {}))
 
 
 ;;; Root systems logic.
