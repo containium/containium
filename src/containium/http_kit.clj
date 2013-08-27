@@ -86,7 +86,7 @@
 
 (defn upstart-box
   "Add a box holding a ring application. The box's project definition
-  needs to have a :ring configuration inside the :boxure
+  needs to have a :ring configuration inside the :containium
   configuration. A required key is :handler-sym, which, when evaluated
   inside the box, should be the ring handler function. Optional keys
   are :context-path and :host-regex. The first acts as a filter for
@@ -94,7 +94,7 @@
   The second is a regular expression, which is matched against the
   server name of the request, for example \".*containium.com\"."
   [{:keys [name project] :as box}]
-  (let [ring-conf (clean-ring-conf (-> project :boxure :ring))
+  (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         handler-fn (boxure/eval box (:handler-sym ring-conf))]
     (swap! apps assoc name (RingApp. box handler-fn ring-conf))
     (make-app)))

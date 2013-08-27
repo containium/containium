@@ -55,7 +55,7 @@
                       (.getClassLoader clojure.lang.RT)
                       module)]
       ;; Box start logic here.
-      (when-let [ring-conf (-> box :project :boxure :ring)]
+      (when-let [ring-conf (-> box :project :containium :ring)]
         (http-kit/upstart-box box))
       box)
     (catch Throwable ex
@@ -80,7 +80,7 @@
   [boxes]
   (doseq [[name box] boxes]
     (try
-      (when (-> box :project :boxure :ring)
+      (when (-> box :project :containium :ring)
         (http-kit/remove-box box))
       ;; Box stop logic here.
       (catch Throwable ex
