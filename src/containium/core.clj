@@ -12,7 +12,8 @@
             [clojure.string :refer (split trim)]
             [boxure.core :refer (boxure) :as boxure]
             [clojure.tools.nrepl.server :as nrepl])
-  (:import [jline.console ConsoleReader]))
+  (:import [jline.console ConsoleReader]
+           [java.util Timer TimerTask]))
 
 
 ;;; Globals for nREPL access. A necessary evil.
@@ -255,6 +256,23 @@
             (recur (or new-state state) (or new-boxes boxes))))))))
 
 
+;;; Thread debug on shutdown.
+
+(defn shutdown-timer
+  "Start a timer that shows debug information, iff the JVM has not
+  shutdown yet and `wait` seconds have passed."
+  [wait]
+  (let [timer (Timer. "shutdown-timer" true)
+        task (proxy [TimerTask] []
+               (run []
+                 (let [threads (keys (Thread/getAllStackTraces))]
+                   (println (apply str "Threads still running (" (count threads) "):\n  "
+                                   (interpose "\n  " threads))))))
+        cancel-thread (Thread. #(.cancel timer))]
+    (.schedule timer task (* wait 1000))
+    (.addShutdownHook (Runtime/getRuntime) cancel-thread)))
+
+
 ;;; The coordinating functions.
 
 (defn run
@@ -278,4 +296,5 @@
                    [:kafka kafka/start kafka/stop]
                    [:http-kit http-kit/start http-kit/stop]]
       (:config spec) {} (partial run spec)))
-  (shutdown-agents))
+  (shutdown-agents)
+  (shutdown-timer 10))
