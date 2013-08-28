@@ -267,10 +267,8 @@
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
-                                   (interpose "\n  " threads))))))
-        cancel-thread (Thread. #(.cancel timer))]
-    (.schedule timer task (* wait 1000))
-    (.addShutdownHook (Runtime/getRuntime) cancel-thread)))
+                                   (interpose "\n  " threads))))))]
+    (.schedule timer task (* wait 1000))))
 
 
 ;;; The coordinating functions.
