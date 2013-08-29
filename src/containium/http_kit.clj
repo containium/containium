@@ -98,7 +98,8 @@
   [{:keys [name project] :as box}]
   (println "Adding ring handler in module" name "...")
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
-        handler-fn @(boxure/eval box (:handler-sym ring-conf))]
+        handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler-sym ring-conf))))
+                                          ~(:handler-sym ring-conf)))]
     (swap! apps assoc name (RingApp. box handler-fn ring-conf))
     (make-app)
     (println "Ring handler for module" name "added, in context:"
