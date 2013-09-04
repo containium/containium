@@ -8,7 +8,7 @@
 
 
 (defn start
-  [{:keys [kafka]}]
+  [{:keys [kafka]} systems]
   (println "Starting embedded Kafka using config:" kafka)
   (let [server-props (doto (Properties.)
                        (.setProperty "port" (:port kafka)) ;

@@ -34,18 +34,24 @@
   [system-components config systems f]
   (if-let [[key start stop] (first system-components)]
     (try
-      (let [system (start config)]
+      (let [system (start config systems)]
         (with-systems (rest system-components) config (assoc systems key system) f)
-        (try
-          (stop system)
-          (catch Throwable ex
-            (println "Exception while stopping system component" key ":" ex))))
+        (when stop
+          (try
+            (stop system)
+            (catch Throwable ex
+              (println "Exception while stopping system component" key ":" ex)))))
       (catch Throwable ex
         (println "Exception while starting system component" key ":" ex)))
     (f systems)))
 
 
 ;;; Box logic.
+
+(def isolate-re-str
+  (str "containium.*"
+       "|taoensso.*"
+       "|ring.*"))
 
 (defn check-project
   [project]
@@ -65,7 +71,7 @@
 
 (defn start-box
   "The logic for starting a box."
-  [module resolve-dependencies root-config]
+  [module resolve-dependencies root-config systems]
   (println "Starting module" module "...")
   (try
     (let [project (boxure/jar-project module)]
@@ -73,20 +79,20 @@
         (apply println "Could not start module" (:name project) "for the following reasons:\n  "
                (interpose "\n  " errors))
         (let [box (boxure {:resolve-dependencies resolve-dependencies
-                           :isolate "containium.*"}
+                           :isolate isolate-re-str}
                           (.getClassLoader clojure.lang.RT)
                           module)
               module-config (:containium project)
-              start-result @(boxure/eval box
-                                         `(do (require '~(symbol (namespace (:start module-config))))
-                                              (~(:start module-config) ~root-config)))]
-          (if (instance? Throwable start-result)
+              start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
+                                              ~(:start module-config)))]
+          (if (instance? Throwable start-fn)
             (do (boxure/clean-and-stop box)
-                (throw start-result))
+                (throw start-fn))
             (try
-              (when (:ring module-config) (http-kit/upstart-box box))
-              (println "Module" (:name box) "started.")
-              (assoc box :start-result start-result)
+              (let [start-result (boxure/call-in-box box start-fn root-config systems)]
+                (when (:ring module-config) (http-kit/upstart-box box))
+                (println "Module" (:name box) "started.")
+                (assoc box :start-result start-result))
               (catch Throwable ex
                 (boxure/clean-and-stop box)
                 (throw ex)))))))
@@ -102,7 +108,7 @@
     (loop [modules modules
            boxes {}]
       (if-let [module (first modules)]
-        (if-let [result (start-box module resolve-dependencies config)]
+        (if-let [result (start-box module resolve-dependencies config systems)]
           (recur (rest modules) (assoc boxes (:name result) result))
           (recur (rest modules) boxes))
         boxes))))
@@ -115,16 +121,13 @@
     (println "Stopping module" name "...")
     (try
       (when (:ring module-config) (http-kit/remove-box box))
-      (let [stop-result @(boxure/eval box
-                                      `(do (require '~(symbol (namespace (:stop module-config))))
-                                           (~(:stop module-config) ~(:start-result box))))]
-        (when (instance? Throwable stop-result)
-          (println "Module" name "reported exception when stopping:" stop-result)))
+      (let [stop-fn @(boxure/eval box
+                                  `(do (require '~(symbol (namespace (:stop module-config))))
+                                       ~(:stop module-config)))]
+        (boxure/call-in-box box stop-fn (:start-result box)))
       (catch Throwable ex
         (println "Exception while stopping module" name ":" ex)
-        (.printStackTrace ex)
-        ;; Kill box here?
-        )
+        (.printStackTrace ex))
       (finally
         (boxure/clean-and-stop box)
         (println "Module" name "stopped.")))))
@@ -147,17 +150,17 @@
   an updated boxes map. If no value is returned, or a value in the
   pair is nil, then the state and/or boxes are not updated in the
   command-loop."
-  (fn [command args spec state boxes] command))
+  (fn [command args spec systems state boxes] command))
 
 
 (defmethod handle-command :default
-  [command _ _ _ _]
+  [command _ _ _ _ _]
   (println "Unknown command:" command)
   (println "Type 'help' for info on the available commands."))
 
 
 (defmethod handle-command "help"
-  [_ _ _ _ _]
+  [_ _ _ _ _ _]
   (println (str "Available commands are:"
                 "\n"
                 "\n module <list|start|stop> [path|name]"
@@ -175,7 +178,7 @@
 
 
 (defmethod handle-command "repl"
-  [_ args spec state _]
+  [_ args spec _ state _]
   (let [[action port-str] args]
     (case action
       "stop" (if-let [server (:nrepl state)]
@@ -198,21 +201,21 @@
 
 
 (defmethod handle-command "threads"
-  [_ _ _ _ _]
+  [_ _ _ _ _ _]
   (let [threads (keys (Thread/getAllStackTraces))]
     (println (apply str "Current threads (" (count threads) "):\n  "
                     (interpose "\n  " threads)))))
 
 
 (defmethod handle-command "module"
-  [_ args spec _ boxes]
+  [_ args spec systems _ boxes]
   (let [[action arg] args]
     (case action
       "list" (println (apply str "Current modules (" (count boxes) "):\n  "
                              (interpose "\n  " (keys boxes))))
       "start" (let [{:keys [config resolve-dependencies]} spec]
                 (if arg
-                  (when-let [box (start-box arg resolve-dependencies config)]
+                  (when-let [box (start-box arg resolve-dependencies config systems)]
                     [nil (assoc boxes (:name box) box)])
                   (println "Missing path argument.")))
       "stop" (if arg
@@ -252,7 +255,7 @@
         (case command
           "" (recur state boxes)
           "shutdown" (do (shutdown-state state) boxes)
-          (let [[new-state new-boxes] (handle-command command args spec state boxes)]
+          (let [[new-state new-boxes] (handle-command command args spec systems state boxes)]
             (recur (or new-state state) (or new-boxes boxes))))))))
 
 

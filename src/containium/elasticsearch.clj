@@ -7,7 +7,7 @@
 
 
 (defn start
-  [config]
+  [config systems]
   (println "Starting embedded ElasticSearch node...")
   (let [node (.node (NodeBuilder/nodeBuilder))]
     (println "Embedded ElasticSearsch node started.")

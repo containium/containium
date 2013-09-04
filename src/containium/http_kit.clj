@@ -119,7 +119,7 @@
 
 (defn start
   "Start HTTP Kit, based on the specified spec config."
-  [config]
+  [config systems]
   (println "Starting HTTP Kit using config:" (:http-kit config))
   (make-app)
   (let [stop-fn (run-server #'app (:http-kit config))]
