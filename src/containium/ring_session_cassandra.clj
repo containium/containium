@@ -53,14 +53,15 @@
 
 (defn- do-prepared
   [pp-query consistency & args]
-  (let [consistency ({:any ConsistencyLevel/ANY
+  (let [consistency (case consistency
+                      :any ConsistencyLevel/ANY
                       :one ConsistencyLevel/ONE
                       :two ConsistencyLevel/TWO
                       :three ConsistencyLevel/THREE
                       :quorum ConsistencyLevel/QUORUM
                       :all ConsistencyLevel/ALL
                       :local-quorum ConsistencyLevel/LOCAL_QUORUM
-                      :each-quorum ConsistencyLevel/EACH_QUORUM} consistency)
+                      :each-quorum ConsistencyLevel/EACH_QUORUM)
         result (QueryProcessor/processPrepared pp-query consistency query-state
                                                (map ->bytebuffer args))]
     (when (instance? ResultMessage$Rows result)
