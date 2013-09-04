@@ -48,6 +48,17 @@
                                (when context-path context-test))))))
 
 
+(defn- wrap-try-catch
+  [handler]
+  (fn [request]
+    (try
+      (handler request)
+      (catch Throwable t
+        (println "Error handling request:" request)
+        (.printStackTrace t)
+        {:status 500 :body "Internal error."}))))
+
+
 (defn- make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
@@ -70,7 +81,7 @@
                                                       'request))))))))]
                     (partial (eval fn-form) sorted))
                   (constantly {:status 503 :body "no apps loaded"}))]
-    (alter-var-root #'app (constantly handler))))
+    (alter-var-root #'app (constantly (wrap-try-catch handler)))))
 
 
 ;;; Ring app registration.
