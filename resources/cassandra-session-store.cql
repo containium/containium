@@ -1,0 +1,1 @@
+../systems/ring-session-cassandra/resources/cassandra-session-store.cql

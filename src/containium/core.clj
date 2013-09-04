@@ -7,6 +7,7 @@
             [containium.elasticsearch :as elastic]
             [containium.kafka :as kafka]
             [containium.http-kit :as http-kit]
+            [containium.ring-session-cassandra :as cass-session]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
@@ -288,14 +289,21 @@
     (stop-boxes boxes)))
 
 
+(require 'ring.middleware.session.memory)
+
 (defn -main
   [& args]
-  (let [spec (-> "spec.clj" resource slurp edn/read-string)]
+  (let [spec (-> "spec.clj" resource slurp edn/read-string)
+        ]
     (swap! globals assoc :spec spec)
     (with-systems [[:cassandra cassandra/start cassandra/stop]
-                   [:elastic elastic/start elastic/stop]
-                   [:kafka kafka/start kafka/stop]
-                   [:http-kit http-kit/start http-kit/stop]]
-      (:config spec) {} (partial run spec)))
+                   ;[:elastic elastic/start elastic/stop]
+                   ;[:kafka kafka/start kafka/stop]
+                   [:http-kit http-kit/start http-kit/stop]
+                   [:session-store cass-session/start nil]
+                   ]
+      (:config spec)
+      {} ;{:session-store (ring.middleware.session.memory/memory-store)}
+      (partial run spec)))
   (shutdown-agents)
   (shutdown-timer 10))
