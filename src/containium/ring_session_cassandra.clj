@@ -25,7 +25,7 @@
   (condp instance? primitive
     String
     (let [encoder (.newEncoder (Charset/forName "UTF-8"))]
-      (.encode encoder (CharBuffer/wrap primitive)))
+      (.encode encoder (CharBuffer/wrap ^String primitive)))
 
     (Class/forName "[B")
     (ByteBuffer/wrap primitive)
@@ -38,7 +38,7 @@
 
 
 (defn- bytebuffer->bytes
-  [bb]
+  [^ByteBuffer bb]
   (if (.hasArray bb)
     (Arrays/copyOfRange (.array bb)
                         (+ (.position bb) (.arrayOffset bb))
@@ -76,7 +76,7 @@
         result (QueryProcessor/processPrepared pp-query consistency query-state
                                                (map ->bytebuffer args))]
     (when (instance? ResultMessage$Rows result)
-      (UntypedResultSet. (.result result)))))
+      (UntypedResultSet. (.result ^ResultMessage$Rows result)))))
 
 
 ;;; Session Cassandra definitions.
@@ -98,7 +98,7 @@
 
 (defn- read-session-data
   [key]
-  (when-let [data (do-prepared (deref read-query) session-consistency key)]
+  (when-let [^UntypedResultSet data (do-prepared (deref read-query) session-consistency key)]
     (when-not (.isEmpty data)
       (-> (.. data one (getBytes "data") slice)
           bytebuffer->bytes
