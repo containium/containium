@@ -4,15 +4,16 @@
 
 (ns containium.ring-session-cassandra
   (:require [ring.middleware.session.store :refer (SessionStore read-session)]
-            [taoensso.nippy :refer (freeze thaw-from-stream!)]
-            [clojure.core.cache :refer (ttl-cache-factory)])
+            [taoensso.nippy :refer (freeze thaw)]
+            [clojure.core.cache :refer (ttl-cache-factory)]
+            [clojure.java.io :refer (copy)])
   (:import [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
            [org.apache.cassandra.service ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [containium ByteBufferInputStream]
-           [java.io DataInputStream]
-           [java.util UUID]
+           [java.io ByteArrayOutputStream]
+           [java.util UUID Arrays]
            [java.nio CharBuffer ByteBuffer]
            [java.nio.charset Charset]))
 
@@ -21,7 +22,6 @@
 
 (defn- ->bytebuffer
   [primitive]
-  (prn (type primitive))
   (condp instance? primitive
     String
     (let [encoder (.newEncoder (Charset/forName "UTF-8"))]
@@ -35,6 +35,17 @@
 
     ByteBuffer
     primitive))
+
+
+(defn- bytebuffer->bytes
+  [bb]
+  (if (.hasArray bb)
+    (Arrays/copyOfRange (.array bb)
+                        (+ (.position bb) (.arrayOffset bb))
+                        (+ (.position bb) (.arrayOffset bb) (.limit bb)))
+    (let [baos (ByteArrayOutputStream. (.remaining bb))]
+      (copy (ByteBufferInputStream. bb) baos)
+      (.toByteArray baos))))
 
 
 ;;; General Cassandra functions.
@@ -75,7 +86,7 @@
 
 (defn- write-query*
   [ttl]
-  (prepared-query (str "UPDATE ring.sessions USING TTL " (* ttl 60) " SET data = ? WHERE key = ?;")))
+  (prepared-query (str "UPDATE ring.sessions USING TTL " (* ttl 60 2) " SET data = ? WHERE key = ?;")))
 
 (def write-query (memoize write-query*))
 
@@ -90,9 +101,8 @@
   (when-let [data (do-prepared (deref read-query) session-consistency key)]
     (when-not (.isEmpty data)
       (-> (.. data one (getBytes "data") slice)
-          ByteBufferInputStream.
-          DataInputStream.
-          thaw-from-stream!))))
+          bytebuffer->bytes
+          thaw))))
 
 
 (defn- write-session-data
@@ -115,9 +125,15 @@
                  (read-session-data key)))
         {}))
   (write-session [this key data]
-    (let [new-key (or key (str (UUID/randomUUID)))]
-      (write-session-data new-key data ttl)
-      (swap! cache assoc new-key data)
+    (let [new-key (or key (str (UUID/randomUUID)))
+          new-data (if-not (and (get data '_last_db_write)
+                                (< (- (System/currentTimeMillis) (* ttl 60000)) (data '_last_db_write))
+                                (= data (read-session this key)))
+                     (assoc data '_last_db_write (System/currentTimeMillis))
+                     data)]
+      (when-not (= data new-data)
+        (write-session-data new-key new-data ttl))
+      (swap! cache assoc new-key new-data)
       new-key))
   (delete-session [_ key]
     (when key
