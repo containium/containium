@@ -3,7 +3,8 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.core
-  (:require [containium.cassandra :as cassandra]
+  (:require [containium.systems :refer (with-systems)]
+            [containium.cassandra :as cassandra]
             [containium.elasticsearch :as elastic]
             [containium.kafka :as kafka]
             [containium.http-kit :as http-kit]
@@ -12,47 +13,18 @@
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
             [boxure.core :refer (boxure) :as boxure]
-            [clojure.tools.nrepl.server :as nrepl])
+            [clojure.tools.nrepl.server :as nrepl]
+            [clojure.pprint :refer (pprint)])
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask]))
 
 
-;;; Globals for nREPL access. A necessary evil.
+;;; Globals for REPL access. A necessary evil.
 
 (defonce globals (atom {}))
 
 
-;;; Root systems logic.
-
-(defn with-systems
-  "This function starts the root systems for the containium. The
-  `system-components` argument is a sequence of triples, where each
-  triple contains an identifier (likely a keyword) for the root
-  system, the symbol pointing to the start function of the system and
-  a symbol to the stop function of the system. The start function
-  takes the config from spec as an argument, whereas the stop function
-  takes that what the start function returned as an argument."
-  [system-components config systems f]
-  (if-let [[key start stop] (first system-components)]
-    (try
-      (let [system (start config systems)]
-        (with-systems (rest system-components) config (assoc systems key system) f)
-        (when stop
-          (try
-            (stop system)
-            (catch Throwable ex
-              (println "Exception while stopping system component" key ":" ex)))))
-      (catch Throwable ex
-        (println "Exception while starting system component" key ":" ex)))
-    (f systems)))
-
-
 ;;; Box logic.
-
-(def isolate-re-str
-  (str "containium.*"
-       "|taoensso.*"
-       "|ring.*"))
 
 (defn check-project
   [project]
@@ -72,7 +44,7 @@
 
 (defn start-box
   "The logic for starting a box."
-  [module resolve-dependencies root-config systems]
+  [module resolve-dependencies root-config systems isolate]
   (println "Starting module" module "...")
   (try
     (let [project (boxure/jar-project module)]
@@ -80,7 +52,7 @@
         (apply println "Could not start module" (:name project) "for the following reasons:\n  "
                (interpose "\n  " errors))
         (let [box (boxure {:resolve-dependencies resolve-dependencies
-                           :isolate isolate-re-str}
+                           :isolate isolate}
                           (.getClassLoader clojure.lang.RT)
                           module)
               module-config (:containium project)
@@ -104,12 +76,12 @@
 
 (defn start-boxes
   "Starts all the boxes in the specified spec."
-  [spec systems]
+  [spec systems isolate]
   (let [{:keys [config modules resolve-dependencies]} spec]
     (loop [modules modules
            boxes {}]
       (if-let [module (first modules)]
-        (if-let [result (start-box module resolve-dependencies config systems)]
+        (if-let [result (start-box module resolve-dependencies config systems isolate)]
           (recur (rest modules) (assoc boxes (:name result) result))
           (recur (rest modules) boxes))
         boxes))))
@@ -151,7 +123,7 @@
   an updated boxes map. If no value is returned, or a value in the
   pair is nil, then the state and/or boxes are not updated in the
   command-loop."
-  (fn [command args spec systems state boxes] command))
+  (fn [command args spec systems isolate state boxes] command))
 
 
 (defmethod handle-command :default
@@ -161,11 +133,14 @@
 
 
 (defmethod handle-command "help"
-  [_ _ _ _ _ _]
+  [_ _ _ _ _ _ _]
   (println (str "Available commands are:"
                 "\n"
                 "\n module <list|start|stop> [path|name]"
                 "\n   Prints a list of running modules."
+                "\n"
+                "\n pprint <spec|systems|isolate|state|boxes>"
+                "\n   Pretty prints the specified variable for debugging."
                 "\n"
                 "\n repl <start|stop> [port]"
                 "\n   Starts an nREPL at the specified port, or stops the current one, inside"
@@ -179,7 +154,7 @@
 
 
 (defmethod handle-command "repl"
-  [_ args spec _ state _]
+  [_ args spec _ _ state _]
   (let [[action port-str] args]
     (case action
       "stop" (if-let [server (:nrepl state)]
@@ -202,21 +177,21 @@
 
 
 (defmethod handle-command "threads"
-  [_ _ _ _ _ _]
+  [_ _ _ _ _ _ _]
   (let [threads (keys (Thread/getAllStackTraces))]
     (println (apply str "Current threads (" (count threads) "):\n  "
                     (interpose "\n  " threads)))))
 
 
 (defmethod handle-command "module"
-  [_ args spec systems _ boxes]
+  [_ args spec systems isolate _ boxes]
   (let [[action arg] args]
     (case action
       "list" (println (apply str "Current modules (" (count boxes) "):\n  "
                              (interpose "\n  " (keys boxes))))
       "start" (let [{:keys [config resolve-dependencies]} spec]
                 (if arg
-                  (when-let [box (start-box arg resolve-dependencies config systems)]
+                  (when-let [box (start-box arg resolve-dependencies config systems isolate)]
                     [nil (assoc boxes (:name box) box)])
                   (println "Missing path argument.")))
       "stop" (if arg
@@ -226,6 +201,20 @@
                  (println "Unknown module:" arg))
                (println "Missing name argument."))
       (println (str "Unknown action '" action "', please use 'list', 'start' or 'stop'.")))))
+
+
+(defmethod handle-command "pprint"
+  [_ args spec systems isolate state boxes]
+  (let [[var] args]
+    (pprint (case var
+              "spec" spec
+              "systems" systems
+              "isolate" isolate
+              ;; ---TODO: Fix printing of nREPL server.
+              "state" "Variable 'state' disabled for now, as printing nREPL server fails."
+              "boxes" boxes
+              (println (str "Unknown variable '" var
+                            "', please use 'spec', 'systems', 'isolate', 'state' or 'boxes'"))))))
 
 
 (defn shutdown-state
@@ -245,7 +234,7 @@
   started boxes. More boxes may be started from the command loop, or
   stopped. Therefore, this function returns an updated map of
   currently running boxes."
-  [spec systems boxes]
+  [spec systems boxes isolate]
   ;; Handle commands like starting and stopping modules, and stopping the application.
   ;; This can be done through typing here, updates on the file system, through sockets...
   (let [jline (ConsoleReader.)]
@@ -256,7 +245,7 @@
         (case command
           "" (recur state boxes)
           "shutdown" (do (shutdown-state state) boxes)
-          (let [[new-state new-boxes] (handle-command command args spec systems state boxes)]
+          (let [[new-state new-boxes] (handle-command command args spec systems isolate state boxes)]
             (recur (or new-state state) (or new-boxes boxes))))))))
 
 
@@ -282,28 +271,27 @@
   when all root systems are up and running. Currently it starts the
   boxes, enters the command loop, and stops the boxes when the command
   loop exited."
-  [spec systems]
+  [spec systems isolates]
   (swap! globals assoc :systems systems)
-  (let [boxes (start-boxes spec systems)
-        boxes (handle-commands spec systems boxes)]
+  (let [isolate (apply str (interpose "|" (remove nil? isolates)))
+        boxes (start-boxes spec systems isolate)
+        boxes (handle-commands spec systems boxes isolate)]
     (stop-boxes boxes)))
 
-
-(require 'ring.middleware.session.memory)
 
 (defn -main
   [& args]
   (let [spec (-> "spec.clj" resource slurp edn/read-string)
         ]
     (swap! globals assoc :spec spec)
-    (with-systems [[:cassandra cassandra/start cassandra/stop]
-                   ;[:elastic elastic/start elastic/stop]
-                   ;[:kafka kafka/start kafka/stop]
-                   [:http-kit http-kit/start http-kit/stop]
-                   [:session-store cass-session/start nil]
-                   ]
+    (with-systems [[:cassandra cassandra/system]
+                   ;; [:elastic elastic/system]
+                   ;; [:kafka kafka/system]
+                   [:http-kit http-kit/system]
+                   [:session-store cass-session/system]]
       (:config spec)
-      {} ;{:session-store (ring.middleware.session.memory/memory-store)}
+      {}
+      ["containium.*"]
       (partial run spec)))
   (shutdown-agents)
   (shutdown-timer 10))

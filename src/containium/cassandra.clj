@@ -4,6 +4,7 @@
 
 (ns containium.cassandra
   "Functions for starting and stopping an embedded Cassandra instance."
+  (:require [containium.systems :refer (->AppSystem)])
   (:import [org.apache.cassandra.service CassandraDaemon]))
 
 
@@ -44,3 +45,6 @@
   [{:keys [daemon] :as cassandra}]
   (when-let [s (.nativeServer daemon)]
     (.isRunning s)))
+
+
+(def system (->AppSystem start stop nil))

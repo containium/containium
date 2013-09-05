@@ -5,7 +5,8 @@
 (ns containium.http-kit
   "The namespace for starting and stopping HTTP Kit, and managing
   boxes that contain ring apps."
-  (:require [org.httpkit.server :refer (run-server)]
+  (:require [containium.systems :refer (->AppSystem)]
+            [org.httpkit.server :refer (run-server)]
             [boxure.core :as boxure]))
 
 
@@ -144,3 +145,8 @@
   (println "Stopping HTTP Kit...")
   (stop-fn)
   (println "HTTP Kit stopped."))
+
+
+;;; The Containium system.
+
+(def system (->AppSystem start stop "org\\.httpkit.*"))

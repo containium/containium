@@ -3,6 +3,7 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.kafka
+  (:require [containium.systems :refer (->AppSystem)])
   (:import  [kafka.server KafkaConfig KafkaServer]
             [java.util Properties]))
 
@@ -28,3 +29,6 @@
   (println "Waiting for embedded Kafka to be fully stopped.")
   (.awaitShutdown server)
   (println "Embedded Kafka fully stopped."))
+
+
+(def system (->AppSystem start stop nil))

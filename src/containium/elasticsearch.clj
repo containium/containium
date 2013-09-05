@@ -3,6 +3,7 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.elasticsearch
+  (:require [containium.systems :refer (->AppSystem)])
   (:import [org.elasticsearch.node Node NodeBuilder]))
 
 
@@ -19,3 +20,6 @@
   (println "Stopping embedded ElasticSearch node...")
   (.close node)
   (println "Embedded ElasticSearch node stopped."))
+
+
+(def system (->AppSystem start stop nil))

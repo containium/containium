@@ -5,7 +5,8 @@
 (ns containium.ring-session-cassandra
   "This namespace contains the Containium system offering a Ring
   SessionStore backed by Cassandra and Nippy."
-  (:require [ring.middleware.session.store :refer (SessionStore read-session)]
+  (:require [containium.systems :refer (->AppSystem)]
+            [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.core.cache :refer (ttl-cache-factory)]
             [clojure.java.io :refer (copy)])
@@ -179,5 +180,5 @@
                      session-ttl)))
 
 
-(defn stop
-  [_])
+(def system (->AppSystem start nil (str "taoensso\\.nippy.*"
+                                        "|ring.*")))
