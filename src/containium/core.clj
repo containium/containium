@@ -211,7 +211,7 @@
               "systems" systems
               "isolate" isolate
               ;; ---TODO: Fix printing of nREPL server.
-              "state" "Variable 'state' disabled for now, as printing nREPL server fails."
+              "state" state
               "boxes" boxes
               (println (str "Unknown variable '" var
                             "', please use 'spec', 'systems', 'isolate', 'state' or 'boxes'"))))))
@@ -245,7 +245,12 @@
         (case command
           "" (recur state boxes)
           "shutdown" (do (shutdown-state state) boxes)
-          (let [[new-state new-boxes] (handle-command command args spec systems isolate state boxes)]
+          (let [[new-state new-boxes]
+                (try
+                  (handle-command command args spec systems isolate state boxes)
+                  (catch Throwable t
+                    (println "Error handling command" command ":")
+                    (.printStackTrace t)))]
             (recur (or new-state state) (or new-boxes boxes))))))))
 
 
