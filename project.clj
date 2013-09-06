@@ -24,4 +24,11 @@
   :exclusions [org.clojure/clojure]
   :java-source-paths ["src-java"]
   :main containium.core
+  :jvm-opts ["-XX:+UseConcMarkSweepGC"
+             "-XX:+CMSClassUnloadingEnabled"
+             "-XX:MaxPermSize=512m"
+             ;; "-XX:+TraceClassLoading"
+             ;; "-XX:+TraceClassUnloading"
+             ;; "-XX:+HeapDumpOnOutOfMemoryError"
+             ]
   :global-vars {*warn-on-reflection* true})
