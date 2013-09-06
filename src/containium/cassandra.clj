@@ -15,8 +15,8 @@
   "Start a Cassandra instance. Give a config location, for example
   `file:dev-resources/cassandra.yaml`. Returns the Server."
   [config systems]
-  (println "Starting embedded Cassandra using config" (:cassandra config))
-  (System/setProperty "cassandra.config" (-> config :cassandra :config-file))
+  (println "Starting embedded Cassandra using config" config)
+  (System/setProperty "cassandra.config" (:config-file config))
   (System/setProperty "cassandra-foreground" "false")
   (let [daemon (CassandraDaemon.)
         thread (Thread. #(.activate daemon))]

@@ -101,7 +101,7 @@
 (defn upstart-box
   "Add a box holding a ring application. The box's project definition
   needs to have a :ring configuration inside the :containium
-  configuration. A required key is :handler-sym, which, when evaluated
+  configuration. A required key is :handler, which, when evaluated
   inside the box, should be the ring handler function. Optional keys
   are :context-path and :host-regex. The first acts as a filter for
   the first element(s) in the request URI, for example \"/api/v1\".
@@ -110,8 +110,8 @@
   [{:keys [name project] :as box}]
   (println "Adding ring handler in module" name "...")
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
-        handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler-sym ring-conf))))
-                                          ~(:handler-sym ring-conf)))]
+        handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
+                                          ~(:handler ring-conf)))]
     (swap! apps assoc name (RingApp. box handler-fn ring-conf))
     (make-app)
     (println "Ring handler for module" name "added, in context:"
@@ -132,9 +132,9 @@
 (defn start
   "Start HTTP Kit, based on the specified spec config."
   [config systems]
-  (println "Starting HTTP Kit using config:" (:http-kit config))
+  (println "Starting HTTP Kit using config:" config)
   (make-app)
-  (let [stop-fn (run-server #'app (:http-kit config))]
+  (let [stop-fn (run-server #'app config)]
     (println "HTTP Kit started.")
     stop-fn))
 

@@ -35,8 +35,8 @@
              (when-not (-> project :containium :stop)
                "Missing :stop configuration in :containium of project.clj.")
              (when (-> project :containium :ring)
-               (when-not (-> project :containium :ring :handler-sym)
-                 "Missing :handler-sym configuration in :ring of :containium of project.clj.")))
+               (when-not (-> project :containium :ring :handler)
+                 "Missing :handler configuration in :ring of :containium of project.clj.")))
        (remove nil?)))
 
 

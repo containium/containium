@@ -96,9 +96,9 @@
 (defn start
   [config systems]
   (if (:cassandra systems)
-    (let [session-ttl (-> config :ring :session-ttl)]
+    (let [session-ttl (:ttl config)]
       ;;---TODO: Try to connect here or something? Or automaticaly write schema if not existing?
-      (println "Creating Cassandra Ring session store, using config:" (:ring config) ".")
+      (println "Creating Cassandra Ring session store, using config:" config ".")
       (CassandraStore. (atom (ttl-cache-factory {} :ttl (* session-ttl 60000)))
                        session-ttl))
     (throw (Exception. (str "Could not start Cassandra Ring session store, as no :cassandra "

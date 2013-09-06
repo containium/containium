@@ -7,13 +7,19 @@
 
 
 ;; This record contains a reference to the start function, the stop function and the isolate regex
-;; String. The start function takes the spec config and systems as an argument. That what is
-;; returned by the start function is put in the 'systems' map, which will be made available to
-;; the systems started after the current one, and all the boxes that will be started. The stop
-;; function takes that what is returned by the start function. The isolate String is used for
-;; letting the Containium know which package names should be isolated inside the boxes (all
-;; Clojure namespaces loaded by this system). The start field is mandatory, the other two may
-;; be nil.
+;; String.
+;;
+;; The start function takes the system specific config from the spec and already running systems as
+;; an argument. That what is returned by the start function is put in the 'systems' map, which will
+;; be made available to the systems started after the current one, and all the boxes that will be
+;; started.
+;;
+;; The stop function takes that what is returned by the start function.
+;;
+;; The isolate String is used for letting the Containium know which package names should be isolated
+;; inside the boxes (all Clojure namespaces loaded by this system).
+;;
+;; The start field is mandatory, the other two may be nil.
 (defrecord AppSystem [start stop isolate])
 
 
@@ -32,7 +38,7 @@
   [system-components config systems isolates f]
   (if-let [[key {:keys [start stop isolate]}] (first system-components)]
     (try
-      (let [system (start config systems)]
+      (let [system (start (config key) systems)]
         (with-systems
           (rest system-components)
           config

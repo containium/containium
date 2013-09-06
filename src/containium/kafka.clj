@@ -9,13 +9,13 @@
 
 
 (defn start
-  [{:keys [kafka]} systems]
-  (println "Starting embedded Kafka using config:" kafka)
+  [config systems]
+  (println "Starting embedded Kafka using config:" config)
   (let [server-props (doto (Properties.)
-                       (.setProperty "port" (:port kafka)) ;
-                       (.setProperty "brokerid" (:broker-id kafka))
-                       (.setProperty "log.dir" (:log-dir kafka))
-                       (.setProperty "zk.connect" (:zk-connect kafka)))
+                       (.setProperty "port" (:port config)) ;
+                       (.setProperty "brokerid" (:broker-id config))
+                       (.setProperty "log.dir" (:log-dir config))
+                       (.setProperty "zk.connect" (:zk-connect config)))
         server (KafkaServer. (KafkaConfig. server-props))]
     (.startup server)
     (println "Embedded Kafka started.")
