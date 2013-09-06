@@ -5,97 +5,19 @@
 (ns containium.ring-session-cassandra
   "This namespace contains the Containium system offering a Ring
   SessionStore backed by Cassandra and Nippy."
-  (:require [containium.systems :refer (->AppSystem)]
+  (:require [publizr.cassandra-util :refer (prepare do-prepared bytebuffer->bytes)]
+            [containium.systems :refer (->AppSystem)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
-            [clojure.core.cache :refer (ttl-cache-factory)]
-            [clojure.java.io :refer (copy)])
+            [clojure.core.cache :refer (ttl-cache-factory)])
   (:import [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
-           [org.apache.cassandra.db ConsistencyLevel]
-           [org.apache.cassandra.service ClientState QueryState]
-           [org.apache.cassandra.transport.messages ResultMessage$Rows]
-           [containium ByteBufferInputStream]
-           [java.io ByteArrayOutputStream]
-           [java.util UUID Arrays]
-           [java.nio CharBuffer ByteBuffer]
-           [java.nio.charset Charset]))
-
-
-;;; Helper functions.
-
-(defn- ->bytebuffer
-  "Converts some basic type to a ByteBuffer. Currently supported types
-  are: String, Long, byte array and ByteBuffer."
-  [primitive]
-  (condp instance? primitive
-    String
-    (let [encoder (.newEncoder (Charset/forName "UTF-8"))]
-      (.encode encoder (CharBuffer/wrap ^String primitive)))
-
-    (Class/forName "[B")
-    (ByteBuffer/wrap primitive)
-
-    Long
-    (.putLong (ByteBuffer/allocate 8) primitive)
-
-    ByteBuffer
-    primitive))
-
-
-(defn- bytebuffer->bytes
-  "Converts a ByteBuffer to a byte array. If the ByteBuffer is backed
-  by an array, a copy of the relevant part of that array is returned.
-  Otherwise, the bytes are streamed into a byte array."
-  [^ByteBuffer bb]
-  (if (.hasArray bb)
-    (Arrays/copyOfRange (.array bb)
-                        (+ (.position bb) (.arrayOffset bb))
-                        (+ (.position bb) (.arrayOffset bb) (.limit bb)))
-    (let [baos (ByteArrayOutputStream. (.remaining bb))]
-      (copy (ByteBufferInputStream. bb) baos)
-      (.toByteArray baos))))
-
-
-;;; General Cassandra functions.
-
-(def ^:private client-state (ClientState. true))
-(def ^:private query-state (QueryState. client-state))
-
-
-(defn- prepared-query
-  "Create a prepared CQLStatement."
-  [query-str]
-  (-> query-str
-      (QueryProcessor/prepare client-state false)
-      .statementId
-      QueryProcessor/getPrepared))
-
-
-(defn- do-prepared
-  "Execute a prepared CQLStatement, using the specified consistency (a
-  keyword) and the positional arguments for the prepared query. If
-  rows are returned by the query, an UntypedResultSet is returned,
-  otherwise nil."
-  [pp-query consistency & args]
-  (let [consistency (case consistency
-                      :any ConsistencyLevel/ANY
-                      :one ConsistencyLevel/ONE
-                      :two ConsistencyLevel/TWO
-                      :three ConsistencyLevel/THREE
-                      :quorum ConsistencyLevel/QUORUM
-                      :all ConsistencyLevel/ALL
-                      :local-quorum ConsistencyLevel/LOCAL_QUORUM
-                      :each-quorum ConsistencyLevel/EACH_QUORUM)
-        result (QueryProcessor/processPrepared pp-query consistency query-state
-                                               (map ->bytebuffer args))]
-    (when (instance? ResultMessage$Rows result)
-      (UntypedResultSet. (.result ^ResultMessage$Rows result)))))
+           [java.util UUID]))
 
 
 ;;; Session Cassandra definitions.
 
 (def ^:private read-query
-  (delay (prepared-query "SELECT data FROM ring.sessions WHERE key = ?;")))
+  (delay (prepare "SELECT data FROM ring.sessions WHERE key = ?;")))
 
 (defn- write-query*
   "Create a prepared update query, using the configured TTL (in
@@ -104,12 +26,12 @@
   database, without requiring updates in the database each time for
   the sake of extending the TTL."
   [ttl]
-  (prepared-query (str "UPDATE ring.sessions USING TTL " (* ttl 60 2) " SET data = ? WHERE key = ?;")))
+  (prepare (str "UPDATE ring.sessions USING TTL " (* ttl 60 2) " SET data = ? WHERE key = ?;")))
 
 (def ^:private write-query (memoize write-query*))
 
 (def ^:private remove-query
-  (delay (prepared-query "DELETE FROM ring.sessions WHERE key = ?;")))
+  (delay (prepare "DELETE FROM ring.sessions WHERE key = ?;")))
 
 
 (def ^:private session-consistency :one)
@@ -173,12 +95,16 @@
 
 (defn start
   [config systems]
-  (println "Creating Cassandra Ring session store, using config:" (:ring config) ".")
-  ;;---TODO: Try to connect here or something? Or automaticaly write schema if not existing?
-  (let [session-ttl (-> config :ring :session-ttl)]
-    (CassandraStore. (atom (ttl-cache-factory {} :ttl (* session-ttl 60000)))
-                     session-ttl)))
+  (if (:cassandra systems)
+    (let [session-ttl (-> config :ring :session-ttl)]
+      ;;---TODO: Try to connect here or something? Or automaticaly write schema if not existing?
+      (println "Creating Cassandra Ring session store, using config:" (:ring config) ".")
+      (CassandraStore. (atom (ttl-cache-factory {} :ttl (* session-ttl 60000)))
+                       session-ttl))
+    (throw (Exception. (str "Could not start Cassandra Ring session store, as no :cassandra "
+                            "system is registered.")))))
 
 
 (def system (->AppSystem start nil (str "taoensso\\.nippy.*"
-                                        "|ring.*")))
+                                        "|ring.*"
+                                        "|publizr\\.cassandra_util.*")))
