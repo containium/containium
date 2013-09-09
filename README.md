@@ -67,3 +67,26 @@ Each module needs to specify a `:containium` entry in the `project.clj` file. Th
 - `:stop`, this mandatory entry has a namespace qualified symbol as its value, pointing to the stop function of the module. This function takes the return value of the start function as its argument.
 
 - `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optially, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified.
+
+## Deploying using file system
+
+Deploying, redeploying, undeploying and swapping modules can be done on the command line, but programmatically it easier done via the file system.
+
+### Current concept, not implemented yet:
+
+Containium watches a directory, as configured in `spec.clj`. One can add jar files in here for deployment, but it is adviced to put symlinks to those files in the directory. Using symlinks has the added benefit that one can deploy the same module multiple times, as it is the name of the symlink that is used in the Containium. Another benifit is that one can edit the jars (or `module.clj` files, see below), without invoking redeployments in the process. The files in the directory get renamed based on their status (e.g. deploying, deployed, etc). Depending on what you do with the files in the directory and the status, one can influence the deployed modules.
+
+- When adding file `X` to the directory, and no `X.deployed` exists, it is deployed. The file gets renamed to `X.deploying` and subsequently to `X.deployed`.
+
+- When touching a file `X.deployed` in the directory (i.e. its modification time changes), it is swapped or redeployed (depending on the `:swap-test` value in the `project.clj` file. The file gets successively renamed to `X.swapping` or `X.redeploying`, and `X.deployed` when done.
+
+- When removing a file `X.deployed`, it is undeployed. A file `X.undeploying` is created, and deleted when done.
+
+- When adding a file `X` while a `X.deployed` exists, a swap or redeploy is performed (depending on the `:swap-test` value in the `project.clj` file of the *new* module jar).
+
+The file/symlink may also point to a `module.clj` file, in which one can specify a config map that is merged into the `:containium` map of `project.clj`.
+
+When something goes wrong during a deploy, swap or redeploy, a file named `X.failed` is added. It contains some error information. The file is removed when a new action is initiated concerning `X`. It is possible that both an `X.deployed` and an `X.failed` file are coexisting in the directory, as this signals a swap going wrong.
+
+
+## Command line
