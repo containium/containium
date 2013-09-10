@@ -4,7 +4,7 @@
 
 (ns containium.systems.fs-deploy.watcher
   "A simple filesystem watcher. It currently supports only one handler
-  for all watchers."
+  for all watchers, and paths cannot be unwatched."
   (:import [java.nio.file FileSystems StandardWatchEventKinds WatchService WatchKey WatchEvent
             ClosedWatchServiceException]
            [java.io File]
