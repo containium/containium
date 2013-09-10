@@ -51,13 +51,14 @@
                         (.reset key))
                     :continue)
                   (catch ClosedWatchServiceException cwse
-                    (println "Stopping filesystem deployment background process..."))
+                    (println "Stopping filesystem watcher."))
                   (catch Exception e
                     (println "Exception while polling for file system events:" e)
-                    (println "Stopped watching. Maybe improve this.")))
+                    (println "Stopping watching. Maybe improve this.")))
               (recur)
-              (println "Filesystem deployment watcher stopped.")))]
-    (doto (Thread. run "watchservice") .start)))
+              (println "Filesystem watcher stopped.")))]
+    (doto (Thread. run "watchservice") .start))
+  watchservice)
 
 
 (defn watch

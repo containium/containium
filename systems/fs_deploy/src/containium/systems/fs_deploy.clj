@@ -36,7 +36,8 @@
 (defn stop
   [^WatchService watchservice]
   (println "Stopping filesystem deployment watcher...")
-  (.close watchservice))
+  (.close watchservice)
+  (println "Filesystem deployment watcher stopped."))
 
 
 (def system (->AppSystem start stop nil))
