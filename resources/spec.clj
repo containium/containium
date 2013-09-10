@@ -10,6 +10,7 @@
                   :log-dir "target/kafka-log"
                   :zk-connect "localhost:2181"}
           :http-kit {:port 8080}
-          :session-store {:ttl 60}}
+          :session-store {:ttl 60}
+          :fs {:deployments "deployments"}}
  :modules []
  :resolve-dependencies true}

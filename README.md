@@ -70,7 +70,7 @@ Each module needs to specify a `:containium` entry in the `project.clj` file. Th
 
 ## Deploying using file system
 
-Deploying, redeploying, undeploying and swapping modules can be done on the command line, but programmatically it easier done via the file system.
+Deploying, redeploying, undeploying and swapping modules can be done on the command line, but programmatically it is easier done via the file system.
 
 ### Current concept, not implemented yet:
 

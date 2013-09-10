@@ -2,7 +2,7 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.cassandra
+(ns containium.systems.cassandra
   "Functions for starting and stopping an embedded Cassandra instance."
   (:require [containium.systems :refer (->AppSystem)])
   (:import [org.apache.cassandra.service CassandraDaemon]))

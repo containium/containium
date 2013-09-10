@@ -2,7 +2,7 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.kafka
+(ns containium.systems.kafka
   (:require [containium.systems :refer (->AppSystem)])
   (:import  [kafka.server KafkaConfig KafkaServer]
             [java.util Properties]))

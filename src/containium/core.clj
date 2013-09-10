@@ -4,11 +4,13 @@
 
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
-            [containium.cassandra :as cassandra]
-            [containium.elasticsearch :as elastic]
-            [containium.kafka :as kafka]
-            [containium.http-kit :as http-kit]
-            [containium.ring-session-cassandra :as cass-session]
+            [containium.systems.cassandra :as cassandra]
+            [containium.systems.elasticsearch :as elastic]
+            [containium.systems.kafka :as kafka]
+            [containium.systems.http-kit :as http-kit]
+            [containium.systems.ring-session-cassandra :as cass-session]
+            [containium.systems.fs-deploy :as fs]
+            [containium.modules :as modules]
             [clojure.edn :as edn]
             [clojure.java.io :refer (resource)]
             [clojure.string :refer (split trim)]
@@ -289,11 +291,12 @@
   (let [spec (-> "spec.clj" resource slurp edn/read-string)
         ]
     (swap! globals assoc :spec spec)
-    (with-systems [[:cassandra cassandra/system]
+    (with-systems [;; [:cassandra cassandra/system]
                    ;; [:elastic elastic/system]
                    ;; [:kafka kafka/system]
-                   [:http-kit http-kit/system]
-                   [:session-store cass-session/system]]
+                   ;; [:http-kit http-kit/system]
+                   ;; [:session-store cass-session/system]
+                   [:fs fs/system]]
       (:config spec)
       {}
       ["containium.*"]

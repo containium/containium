@@ -2,7 +2,7 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.ring-session-cassandra
+(ns containium.systems.ring-session-cassandra
   "This namespace contains the Containium system offering a Ring
   SessionStore backed by Cassandra and Nippy."
   (:require [publizr.cassandra-util :refer (prepare do-prepared bytebuffer->bytes)]
