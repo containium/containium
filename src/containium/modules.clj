@@ -111,8 +111,8 @@
   Manager
   (list-active [_]
     (into {} (keep (fn [[name agent]]
-                     (let [state (:state agent)]
-                       (when-not (= :undeployed state)
+                     (let [state (:state @agent)]
+                       (when (not= :undeployed state)
                          [name state])))
                    @agents)))
 
