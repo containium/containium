@@ -21,37 +21,42 @@
   (stop [this]))
 
 
-(defn- with-systems*
-  [system-components f systems]
+(defmacro with-systems*
+  [symbol system-components body]
   (if-let [[name system] (first system-components)]
-    (try
-      (let [system (if (satisfies? Startable system) (start system systems) system)]
-        (with-systems* (rest system-components) f (assoc systems name system))
-        (when (satisfies? Stoppable system)
-          (try
-            (stop system)
-            (catch Throwable ex
-              (println "Exception while stopping system component" name ":" ex)
-              (.printStackTrace ex)))))
-      (catch Throwable ex
-        (println "Exception while starting system component" name ":" ex)
-        (.printStackTrace ex)))
-    (try
-      (f systems)
-      (catch Throwable ex
-        (println "Exception while running `with-systems` function. Stopping systems.")
-        (.printStackTrace ex)))))
+    `(try
+       (let [system# ~system
+             system# (if (satisfies? Startable system#) (start system# ~symbol) system#)
+             ~symbol (assoc ~symbol ~name system#)]
+         (with-systems* ~symbol ~(rest system-components) ~body)
+         (when (satisfies? Stoppable system#)
+           (try
+             (stop system#)
+             (catch Throwable ex#
+               (println "Exception while stopping system component" ~name "-" ex#)
+               (.printStackTrace ex#)))))
+       (catch Throwable ex#
+         (println "Exception while starting system component" ~name "-" ex#)
+         (.printStackTrace ex#)))
+    `(try
+      ~@body
+      (catch Throwable ex#
+        (println "Exception while running `with-systems` body. Stopping systems.")
+        (.printStackTrace ex#)))))
 
 
-(defn with-systems
-  "This function starts the root systems for the containium. The
-  `system-components` argument is a sequence of alternating
-  name-system pairs. Each pair is an identifier (likely a keyword) for
-  the root system and a reference to the system implementation and/or
-  Startable. If it is a Startable, the return value of the `start`
-  function is considered to be the system. It is also that system on
-  which `stop` is called, if it satisfies Stoppable."
-  [system-components f]
+(defmacro with-systems
+  "This macro expands into starting the systems for the containium. The
+  `symbol` argument is what symbol the eventual systems map is bound
+  to, which can be used in the body. The `system-components` argument
+  is a vector of alternating name-system pairs. Each pair is an
+  identifier (likely a keyword) for the root system and a reference to
+  the system implementation and/or Startable. If it is a Startable,
+  the return value of the `start` function is considered to be the
+  system. It is also that system on which `stop` is called, if it
+  satisfies Stoppable."
+  [symbol system-components & body]
   (assert (even? (count system-components))
           "System components vector needs to have an even number of forms.")
-  (with-systems* (partition 2 system-components) f {}))
+  `(let [~symbol {}]
+     (with-systems* ~symbol ~(partition 2 system-components) ~body)))
