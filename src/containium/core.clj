@@ -289,14 +289,14 @@
 
 (defn -main
   [& args]
-  (with-systems [[:config (config/file-config (as-file (resource "spec.clj")))]
-                 ;; [:cassandra cassandra/system]
-                 ;; [:elastic elastic/system]
-                 ;; [:kafka kafka/system]
-                 ;; [:http-kit http-kit/system]
-                 ;; [:session-store cass-session/system]
-                 [:modules modules/default-manager]
-                 ;; [:fs fs/system]
+  (with-systems [:config (config/file-config (as-file (resource "spec.clj")))
+                 ;; :cassandra cassandra/system
+                 ;; :elastic elastic/system
+                 ;; :kafka kafka/system
+                 ;; :http-kit http-kit/system
+                 ;; :session-store cass-session/system
+                 :modules modules/default-manager
+                 ;; :fs fs/system
                  ]
     run)
   (shutdown-agents)

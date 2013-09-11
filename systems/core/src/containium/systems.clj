@@ -22,11 +22,11 @@
 
 
 (defn- with-systems*
-  [system-components systems f]
+  [system-components f systems]
   (if-let [[name system] (first system-components)]
     (try
       (let [system (if (satisfies? Startable system) (start system systems) system)]
-        (with-systems* (rest system-components) (assoc systems name system) f)
+        (with-systems* (rest system-components) f (assoc systems name system))
         (when (satisfies? Stoppable system)
           (try
             (stop system)
@@ -45,11 +45,13 @@
 
 (defn with-systems
   "This function starts the root systems for the containium. The
-  `system-components` argument is a sequence of tuples, where each
-  tuple contains an identifier (likely a keyword) for the root system
-  and a reference to the system implementation and/or Startable. If it
-  is a Startable, the return value of the `start` function is
-  considered to be the system. It is also that system on which `stop`
-  is called, if it satisfies Stoppable."
+  `system-components` argument is a sequence of alternating
+  name-system pairs. Each pair is an identifier (likely a keyword) for
+  the root system and a reference to the system implementation and/or
+  Startable. If it is a Startable, the return value of the `start`
+  function is considered to be the system. It is also that system on
+  which `stop` is called, if it satisfies Stoppable."
   [system-components f]
-  (with-systems* system-components {} f))
+  (assert (even? (count system-components))
+          "System components vector needs to have an even number of forms.")
+  (with-systems* (partition 2 system-components) f {}))

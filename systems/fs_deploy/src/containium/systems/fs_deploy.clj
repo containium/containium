@@ -27,7 +27,7 @@
 (defn- handle-create
   [^Path path]
   (prn @(deploy! (.. path getFileName toString)
-                 (File. (.. path toAbsolutePath toString)))))
+                 (.toFile path))))
 
 
 (defn handle-modify
