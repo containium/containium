@@ -54,9 +54,38 @@
   the system implementation and/or Startable. If it is a Startable,
   the return value of the `start` function is considered to be the
   system. It is also that system on which `stop` is called, if it
-  satisfies Stoppable."
+  satisfies Stoppable.
+
+  Use the `protocol-forwarder` macro to use protocol implementation
+  inside modules."
   [symbol system-components & body]
   (assert (even? (count system-components))
           "System components vector needs to have an even number of forms.")
   `(let [~symbol {}]
      (with-systems* ~symbol ~(partition 2 system-components) ~body)))
+
+
+(defmacro protocol-forwarder
+  "Reifies a protocol that forwards all calls to an existing
+  implementation. For example:
+
+  (defprotocol Foo (bar [this baz]))
+
+  (deftype FooImpl [] Foo (bar [_ baz] (prn baz)))
+
+  (def foo-forwarder (protocol-forwarder Foo))
+
+  (bar (foo-forwarder (FooImpl.)) 'alice) ; prints alice.
+
+  A forwarder is useful in case a protocol does not recognize the
+  implementation as such."
+  [protocol]
+  (let [impl (gensym "impl")]
+    `(fn [~impl]
+       (reify ~protocol
+         ~@(for [sig (:sigs (eval protocol))
+                 :let [{:keys [name arglists]} (val sig)]
+                 arglist arglists]
+             `(~name ~arglist (. ~impl
+                                 ~(symbol (.replaceAll (str name) "-" "_"))
+                                 ~@(rest arglist))))))))

@@ -7,7 +7,7 @@
   (:require [boxure.core :refer (boxure) :as boxure]))
 
 
-(defn check-project
+(defn- check-project
   [project]
   (->> (list (when-not (:containium project)
                "Missing :containium configuration in project.clj.")

@@ -5,13 +5,16 @@
 ;;;; Development settings.
 
 {:http-kit {:port 8080}
+ :cassandra {:config-file "cassandra.yaml"}
+ :session-store {:ttl 1}
  :modules {:resolve-dependencies true
-           :isolate ""
+           :isolates ["containium.*"
+                      "org\\.httpkit.*"
+                      "taoensso\\.nippy.*"
+                      "ring.*"]
            :start-on-boot ["dev-resources/test-module/target/test-module-0.1.jar"]}
- :config {:cassandra {:config-file "cassandra.yaml"}
-          :kafka {:port "9090"
+ :config {:kafka {:port "9090"
                   :broker-id "1"
                   :log-dir "target/kafka-log"
                   :zk-connect "localhost:2181"}
-          :session-store {:ttl 1}
           :fs {:deployments "dev-resources/deployments"}}}

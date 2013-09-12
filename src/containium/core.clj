@@ -4,11 +4,11 @@
 
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
-            ;; [containium.systems.cassandra :as cassandra]
+            [containium.systems.cassandra :as cassandra]
             ;; [containium.systems.elasticsearch :as elastic]
             ;; [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
-            ;; [containium.systems.ring-session-cassandra :as cass-session]
+            [containium.systems.ring-session-cassandra :as cass-session]
             ;; [containium.systems.fs-deploy :as fs]
             [containium.systems.config :as config]
             [containium.modules :as modules]
@@ -201,11 +201,11 @@
 (defn -main
   [& args]
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
-                         ;; :cassandra cassandra/system
+                         :embedded-cassandra cassandra/embedded12
                          ;; :elastic elastic/system
                          ;; :kafka kafka/system
                          :ring ring/http-kit
-                         ;; :session-store cass-session/system
+                         :session-store cass-session/embedded
                          :modules modules/default-manager
                          ;; :fs fs/system
                          ]

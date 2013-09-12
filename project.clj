@@ -19,8 +19,7 @@
                  [org.scala-lang/scala-library "2.9.2"]
                  [kafka/core-kafka_2.9.2 "0.7.2"]
                  [com.taoensso/nippy "2.1.0"]
-                 [org.clojure/core.cache "0.6.3"]
-                 [boxure/shared_2.9.2 "0.1-SNAPSHOT"]]
+                 [org.clojure/core.cache "0.6.3"]]
   :exclusions [org.clojure/clojure]
   :java-source-paths ["src-java"]
   :main containium.core
