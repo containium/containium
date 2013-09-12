@@ -145,4 +145,8 @@
 (def default-manager
   (reify Startable
     (start [_ systems]
+      (assert (:config systems)
+              "Modules Manager needs a Config implementation in the systems map under :config.")
+      (assert (:ring systems)
+              "Modules Manager needs a Ring implementation in the systems map under :ring.")
       (DefaultManager. (:config systems) systems (atom {}) (atom {})))))

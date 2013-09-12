@@ -7,7 +7,7 @@
             ;; [containium.systems.cassandra :as cassandra]
             ;; [containium.systems.elasticsearch :as elastic]
             ;; [containium.systems.kafka :as kafka]
-            ;; [containium.systems.http-kit :as http-kit]
+            [containium.systems.ring :as ring]
             ;; [containium.systems.ring-session-cassandra :as cass-session]
             ;; [containium.systems.fs-deploy :as fs]
             [containium.systems.config :as config]
@@ -283,6 +283,7 @@
   (doseq [module (config/get-config (:config sys) :modules)]
     (prn @(modules/deploy! (:modules sys) (str module) (as-file module))))
   (prn (modules/list-active (:modules sys)))
+  (read-line)
   (doseq [module (keys (modules/list-active (:modules sys)))]
     (prn @(modules/undeploy! (:modules sys) module))))
 
@@ -293,7 +294,7 @@
                          ;; :cassandra cassandra/system
                          ;; :elastic elastic/system
                          ;; :kafka kafka/system
-                         ;; :http-kit http-kit/system
+                         :ring ring/http-kit
                          ;; :session-store cass-session/system
                          :modules modules/default-manager
                          ;; :fs fs/system

@@ -2,24 +2,37 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.systems.http-kit
-  "The namespace for starting and stopping HTTP Kit, and managing
-  boxes that contain ring apps."
-  (:require [containium.systems :refer (->AppSystem)]
+(ns containium.systems.ring
+  "The interface definition of the Ring system. The Ring system offers
+  an API to a ring server."
+  (:require [containium.systems]
+            [containium.systems.config :refer (get-config)]
             [org.httpkit.server :refer (run-server)]
-            [boxure.core :as boxure]))
+            [boxure.core :as boxure])
+  (:import [containium.systems Startable Stoppable]))
 
 
-;;; Ring app registry.
+;;; Public interface
+
+(defprotocol Ring
+  (upstart-box [this box]
+    "Add a box holding a ring application. The box's project definition
+  needs to have a :ring configuration inside the :containium
+  configuration. A required key is :handler, which, when evaluated
+  inside the box, should be the ring handler function. Optional keys
+  are :context-path and :host-regex. The first acts as a filter for
+  the first element(s) in the request URI, for example \"/api/v1\".
+  The second is a regular expression, which is matched against the
+  server name of the request, for example \".*containium.com\".")
+
+  (remove-box [this box]
+    "Removes a box's ring handler from the ring server."))
+
+
+;;; HTTP-Kit implementation.
 
 (defrecord RingApp [box handler-fn ring-conf])
 
-(defonce apps (atom {}))
-
-(defonce ^:private app nil)
-
-
-;;; Overall ring handler creation.
 
 (defn- sort-apps
   "Sort the RingApps for routing. Currently it sorts on the number of
@@ -27,7 +40,7 @@
   [apps]
   (let [non-deterministic (remove #(or (-> % :ring-conf :context-path)
                                        (-> % :ring-conf :host-regex))
-                                   apps)]
+                                  apps)]
     (when (< 1 (count non-deterministic))
       (println (str "Warning: multiple web apps registered not "
                     "having a context-path nor a host-regex ("
@@ -63,8 +76,8 @@
 (defn- make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
-  []
-  (let [handler (if-let [apps (seq (vals @apps))]
+  [apps]
+  (let [handler (if-let [apps (seq (vals apps))]
                   (let [sorted (vec (sort-apps apps))
                         fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
@@ -82,10 +95,8 @@
                                                       'request))))))))]
                     (partial (eval fn-form) sorted))
                   (constantly {:status 503 :body "no apps loaded"}))]
-    (alter-var-root #'app (constantly (wrap-try-catch handler)))))
+    (wrap-try-catch handler)))
 
-
-;;; Ring app registration.
 
 (defn- clean-ring-conf
   "Updates the ring-conf, in order to ensure some properties of the values."
@@ -98,55 +109,34 @@
     result))
 
 
-(defn upstart-box
-  "Add a box holding a ring application. The box's project definition
-  needs to have a :ring configuration inside the :containium
-  configuration. A required key is :handler, which, when evaluated
-  inside the box, should be the ring handler function. Optional keys
-  are :context-path and :host-regex. The first acts as a filter for
-  the first element(s) in the request URI, for example \"/api/v1\".
-  The second is a regular expression, which is matched against the
-  server name of the request, for example \".*containium.com\"."
+(defn- box->ring-app
   [{:keys [name project] :as box}]
-  (println "Adding ring handler in module" name "...")
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))]
-    (swap! apps assoc name (RingApp. box handler-fn ring-conf))
-    (make-app)
-    (println "Ring handler for module" name "added, in context:"
-             (or (:context-path ring-conf) "/"))))
+    (RingApp. box handler-fn ring-conf)))
 
 
-(defn remove-box
-  "Removes a box's ring handler from the ring server."
-  [{name :name}]
-  (println "Removing ring handler of" name "module...")
-  (swap! apps dissoc name)
-  (make-app)
-  (println "Ring handler of module" name "removed."))
+(defrecord HttpKit [stop-fn app apps]
+  Ring
+  (upstart-box [_ box]
+    (->> (box->ring-app box)
+         (swap! apps assoc (:name box))
+         (make-app)
+         (reset! app)))
+  (remove-box [_ box]
+    (->> (swap! apps dissoc (:name box))
+         (make-app)
+         (reset! app)))
+
+  Stoppable
+  (stop [_] (stop-fn)))
 
 
-;;; Ring server management.
-
-(defn start
-  "Start HTTP Kit, based on the specified spec config."
-  [config systems]
-  (println "Starting HTTP Kit using config:" config)
-  (make-app)
-  (let [stop-fn (run-server #'app config)]
-    (println "HTTP Kit started.")
-    stop-fn))
-
-
-(defn stop
-  "Stop HTTP Kit, using the stop function as returned by `start`."
-  [stop-fn]
-  (println "Stopping HTTP Kit...")
-  (stop-fn)
-  (println "HTTP Kit stopped."))
-
-
-;;; The Containium system.
-
-(def system (->AppSystem start stop "org\\.httpkit.*"))
+(def http-kit
+  (reify Startable
+    (start [_ systems]
+      (let [app (atom (make-app {}))
+            app-fn (fn [request] (@app request))
+            stop-fn (run-server app-fn (get-config (:config systems) :http-kit))]
+        (HttpKit. stop-fn app (atom {}))))))
