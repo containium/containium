@@ -4,7 +4,10 @@
 
 (ns containium.modules
   "Functions for managing the starting and stopping of modules."
-  (:require [containium.systems])
+  (:require [containium.systems]
+            [containium.systems.config :refer (get-config)]
+            [containium.systems.ring :refer (upstart-box remove-box)]
+            [containium.modules.boxes :refer (start-box stop-box)])
   (:import [containium.systems Startable]))
 
 
@@ -35,6 +38,7 @@
   kind         | data
   ------------------------------------------
   :deployed    | [module-name file]
+  :failed      | [module-name]
   :undeployed  | [module-name]")
 
   (unregister-notifier! [this name]
@@ -46,7 +50,7 @@
 
 ;;; Default implementation.
 
-(defrecord Module [name state file])
+(defrecord Module [name state file box])
 
 
 (defn- notify
@@ -62,11 +66,20 @@
 
 
 (defn- do-deploy
-  [manager name file promise]
-  (send-to-module manager name
-                  #(do (deliver promise (Response. true "Module successfully deployed."))
-                       (notify manager :deployed name file)
-                       (assoc % :state :deployed))))
+  [manager {:keys [name] :as module} file promise]
+  (if-let [box (start-box name file
+                          (get-config (-> manager :systems :config) :modules)
+                          (:systems manager))]
+    (do (when (-> box :project :containium :ring)
+          (upstart-box (-> manager :systems :ring) name box))
+        (send-to-module manager name
+                        #(do (deliver promise (Response. true "Module successfully deployed."))
+                             (notify manager :deployed name file)
+                             (assoc % :state :deployed :file file :box box))))
+    (send-to-module manager name
+                    #(do (deliver promise (Response. false "Error while deploying module."))
+                         (notify manager :failed name)
+                         (assoc % :state :undeployed)))))
 
 
 (defn- handle-deploy
@@ -77,16 +90,21 @@
     :redeploying (do (deliver promise (Response. false "Module is currently redeploying.")) module)
     :swapping (do (deliver promise (Response. false "Module is currently swapping.")) module)
     :undeploying (do (deliver promise (Response. false "Module is currently undeploying.")) module)
-    :undeployed (do (do-deploy manager (:name module) file promise)
+    :undeployed (do (do-deploy manager module file promise)
                     (assoc module :state :deploying))))
 
 
 (defn- do-undeploy
-  [manager name promise]
-  (send-to-module manager name
-                  #(do (deliver promise (Response. true "Module successfully undeployed."))
-                       (notify manager :undeployed name)
-                       (assoc % :state :undeployed))))
+  [manager {:keys [name box] :as module} promise]
+  (let [response (if (do (when (-> box :project :containium :ring)
+                           (remove-box (-> manager :systems :ring) name))
+                         (stop-box name box))
+                   (Response. true "Module successfully undeployed.")
+                   (Response. false "Error while undeploying module."))]
+    (send-to-module manager name
+                    #(do (deliver promise response)
+                         (notify manager :undeployed name)
+                         (assoc % :state :undeployed :box nil)))))
 
 
 (defn- handle-undeploy
@@ -97,7 +115,7 @@
     :swapping (do (deliver promise (Response. false "Module is currently swapping.")) module)
     :undeploying (do (deliver promise (Response. false "Module is already undeploying.")) module)
     :undeployed (do (deliver promise (Response. false "Module is already undeployed.")) module)
-    :deployed (do (do-undeploy manager (:name module) promise)
+    :deployed (do (do-undeploy manager module promise)
                   (assoc module :state :undeploying))))
 
 
@@ -105,6 +123,12 @@
   [module manager promise]
   (deliver promise (Response. false "Redeployments are not implemented yet."))
   module)
+
+
+(defn- agent-error-handler
+  [agent exception]
+  (println "Exception in module agent:")
+  (.printStackTrace exception))
 
 
 (defrecord DefaultManager [config systems agents notifiers]
@@ -119,7 +143,8 @@
   (deploy! [this name file]
     (swap! agents (fn [current name]
                     (if-not (current name)
-                      (assoc current name (agent (Module. name :undeployed nil)))
+                      (assoc current name (agent (Module. name :undeployed nil nil)
+                                                 :error-handler agent-error-handler))
                       current)) name)
     (let [promise (promise)]
       (send-to-module this name handle-deploy this file promise)

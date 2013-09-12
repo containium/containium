@@ -5,12 +5,12 @@
 ;;;; Production settings.
 
 {:http-kit {:port 8080}
+ :modules {:resolve-dependencies true
+           :isolate ""}
  :config {:cassandra {:config-file "cassandra.yaml"}
           :kafka {:port "9090"
                   :broker-id "1"
                   :log-dir "target/kafka-log"
                   :zk-connect "localhost:2181"}
           :session-store {:ttl 60}
-          :fs {:deployments "deployments"}}
- :modules []
- :resolve-dependencies true}
+          :fs {:deployments "deployments"}}}

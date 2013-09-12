@@ -15,7 +15,7 @@
 ;;; Public interface
 
 (defprotocol Ring
-  (upstart-box [this box]
+  (upstart-box [this name box]
     "Add a box holding a ring application. The box's project definition
   needs to have a :ring configuration inside the :containium
   configuration. A required key is :handler, which, when evaluated
@@ -31,7 +31,7 @@
 
 ;;; HTTP-Kit implementation.
 
-(defrecord RingApp [box handler-fn ring-conf])
+(defrecord RingApp [name box handler-fn ring-conf])
 
 
 (defn- sort-apps
@@ -44,7 +44,7 @@
     (when (< 1 (count non-deterministic))
       (println (str "Warning: multiple web apps registered not "
                     "having a context-path nor a host-regex ("
-                    (apply str (interpose ", " (map (comp :name :box) non-deterministic)))
+                    (apply str (interpose ", " (map :name non-deterministic)))
                     ")."))))
   (->> apps
        (sort-by #(count (filter (partial = \/)
@@ -110,22 +110,22 @@
 
 
 (defn- box->ring-app
-  [{:keys [name project] :as box}]
+  [name {:keys [project] :as box}]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))]
-    (RingApp. box handler-fn ring-conf)))
+    (RingApp. name box handler-fn ring-conf)))
 
 
 (defrecord HttpKit [stop-fn app apps]
   Ring
-  (upstart-box [_ box]
-    (->> (box->ring-app box)
-         (swap! apps assoc (:name box))
+  (upstart-box [_ name box]
+    (->> (box->ring-app name box)
+         (swap! apps assoc name)
          (make-app)
          (reset! app)))
-  (remove-box [_ box]
-    (->> (swap! apps dissoc (:name box))
+  (remove-box [_ name]
+    (->> (swap! apps dissoc name)
          (make-app)
          (reset! app)))
 

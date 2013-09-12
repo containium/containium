@@ -14,7 +14,6 @@
             [containium.modules :as modules]
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
-            [boxure.core :refer (boxure) :as boxure]
             [clojure.tools.nrepl.server :as nrepl]
             [clojure.pprint :refer (pprint)])
   (:import [jline.console ConsoleReader]
@@ -24,95 +23,6 @@
 ;;; Globals for REPL access. A necessary evil.
 
 (def systems nil)
-
-
-;; ;;; Box logic.
-
-;; (defn check-project
-;;   [project]
-;;   (->> (list (when-not (:containium project)
-;;                "Missing :containium configuration in project.clj.")
-;;              (when-not (-> project :containium :start)
-;;                "Missing :start configuration in :containium of project.clj.")
-;;              (when-not (-> project :containium :stop)
-;;                "Missing :stop configuration in :containium of project.clj.")
-;;              (when (-> project :containium :ring)
-;;                (when-not (-> project :containium :ring :handler)
-;;                  "Missing :handler configuration in :ring of :containium of project.clj.")))
-;;        (remove nil?)))
-
-
-;; ;;--- FIXME: Check for (and allow somehow?) for duplicates.
-
-;; (defn start-box
-;;   "The logic for starting a box."
-;;   [module resolve-dependencies root-config systems isolate]
-;;   (println "Starting module" module "...")
-;;   (try
-;;     (let [project (boxure/jar-project module)]
-;;       (if-let [errors (seq (check-project project))]
-;;         (apply println "Could not start module" (:name project) "for the following reasons:\n  "
-;;                (interpose "\n  " errors))
-;;         (let [box (boxure {:resolve-dependencies resolve-dependencies
-;;                            :isolate isolate}
-;;                           (.getClassLoader clojure.lang.RT)
-;;                           module)
-;;               module-config (:containium project)
-;;               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
-;;                                               ~(:start module-config)))]
-;;           (if (instance? Throwable start-fn)
-;;             (do (boxure/clean-and-stop box)
-;;                 (throw start-fn))
-;;             (try
-;;               (let [start-result (boxure/call-in-box box start-fn root-config systems)]
-;;                 (when (:ring module-config) (http-kit/upstart-box box))
-;;                 (println "Module" (:name box) "started.")
-;;                 (assoc box :start-result start-result))
-;;               (catch Throwable ex
-;;                 (boxure/clean-and-stop box)
-;;                 (throw ex)))))))
-;;     (catch Throwable ex
-;;       (println "Exception while starting module" module ":" ex)
-;;       (.printStackTrace ex))))
-
-
-;; (defn start-boxes
-;;   "Starts all the boxes in the specified spec."
-;;   [spec systems isolate]
-;;   (let [{:keys [config modules resolve-dependencies]} spec]
-;;     (loop [modules modules
-;;            boxes {}]
-;;       (if-let [module (first modules)]
-;;         (if-let [result (start-box module resolve-dependencies config systems isolate)]
-;;           (recur (rest modules) (assoc boxes (:name result) result))
-;;           (recur (rest modules) boxes))
-;;         boxes))))
-
-
-;; (defn stop-box
-;;   [box]
-;;   (let [name (:name box)
-;;         module-config (-> box :project :containium)]
-;;     (println "Stopping module" name "...")
-;;     (try
-;;       (when (:ring module-config) (http-kit/remove-box box))
-;;       (let [stop-fn @(boxure/eval box
-;;                                   `(do (require '~(symbol (namespace (:stop module-config))))
-;;                                        ~(:stop module-config)))]
-;;         (boxure/call-in-box box stop-fn (:start-result box)))
-;;       (catch Throwable ex
-;;         (println "Exception while stopping module" name ":" ex)
-;;         (.printStackTrace ex))
-;;       (finally
-;;         (boxure/clean-and-stop box)
-;;         (println "Module" name "stopped.")))))
-
-
-;; (defn stop-boxes
-;;   "Calls the stop function of all boxes in the specefied boxes map."
-;;   [boxes]
-;;   (doseq [box (vals boxes)]
-;;     (stop-box box)))
 
 
 ;; ;;; Command loop.
@@ -280,7 +190,7 @@
   loop exited."
   [sys]
   (alter-var-root #'systems (constantly sys))
-  (doseq [module (config/get-config (:config sys) :modules)]
+  (doseq [module (:start-on-boot (config/get-config (:config sys) :modules))]
     (prn @(modules/deploy! (:modules sys) (str module) (as-file module))))
   (prn (modules/list-active (:modules sys)))
   (read-line)
