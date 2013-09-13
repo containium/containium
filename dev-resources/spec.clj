@@ -14,6 +14,7 @@
          :producer {:broker.list "1:localhost:9090"
                     ;; :serializer.class "nl.storm.MessagePackVOSerializer"
                     }}
+ :elastic {}
  :modules {:resolve-dependencies true
            :isolates ["containium.*"
                       "org\\.httpkit.*"

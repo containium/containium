@@ -13,6 +13,7 @@
                   :zk.connect "localhost:2181"}
          :producer {:serializer.class "nl.storm.MessagePackVOSerializer"
                     :zk.connect "localhost:2181"}}
+ :elastic {}
  :modules {:resolve-dependencies true
            :isolate ""}
  :config {:fs {:deployments "deployments"}}}

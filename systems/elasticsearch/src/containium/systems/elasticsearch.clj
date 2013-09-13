@@ -3,23 +3,39 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems.elasticsearch
-  (:require [containium.systems :refer (->AppSystem)])
-  (:import [org.elasticsearch.node Node NodeBuilder]))
+  (:require [containium.systems]
+            [containium.systems.config :refer (Config get-config)])
+  (:import [containium.systems Startable Stoppable]
+           [org.elasticsearch.node Node NodeBuilder]))
 
 
-(defn start
-  [config systems]
-  (println "Starting embedded ElasticSearch node...")
-  (let [node (.node (NodeBuilder/nodeBuilder))]
-    (println "Embedded ElasticSearsch node started.")
-    node))
+;;; The public API for Elastic systems.
+
+(defprotocol Elastic
+  (whut? [this])) ;;--- FIXME: What would be a good API for Elastic?
 
 
-(defn stop
-  [node]
-  (println "Stopping embedded ElasticSearch node...")
-  (.close node)
-  (println "Embedded ElasticSearch node stopped."))
+;;; The embedded implementation.
+
+(defrecord EmbeddedElastic [node]
+  Elastic
+  (whut? [_])
+
+  Stoppable
+  (stop [_]
+    (println "Stopping embedded ElasticSearch node...")
+    (.close node)
+    (println "Embedded ElasticSearch node stopped.")))
 
 
-(def system (->AppSystem start stop nil))
+(def embedded
+  (reify Startable
+    (start [_ systems]
+      (assert (:config systems) "ElasticSearch system requires a :config system.")
+      (assert (satisfies? Config (:config systems))
+              "Expected :config system to satisfy Config protocol.")
+      (let [config (get-config (:config systems) :elastic)
+            _ (println "Starting embedded ElasticSearch node, using config" config "...")
+            node (.node (NodeBuilder/nodeBuilder))]
+        (println "Embedded ElasticSearsch node started.")
+        (EmbeddedElastic. node)))))

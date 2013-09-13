@@ -5,7 +5,7 @@
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
             [containium.systems.cassandra :as cassandra]
-            ;; [containium.systems.elasticsearch :as elastic]
+            [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
             [containium.systems.ring-session-cassandra :as cass-session]
@@ -202,7 +202,7 @@
   [& args]
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                          :embedded-cassandra cassandra/embedded12
-                         ;; :elastic elastic/system
+                         :elastic elastic/embedded
                          :kafka kafka/embedded
                          :ring ring/http-kit
                          :session-store cass-session/embedded
