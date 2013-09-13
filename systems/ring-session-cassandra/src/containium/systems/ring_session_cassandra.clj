@@ -55,11 +55,11 @@
     ;; and the time it specifies is younger than the current time minus TTL,
     ;; and the session data has not changed within the handling of the request.
     (let [new-key (or key (str (UUID/randomUUID)))
-          new-data (if-not (and (get data '_last_db_write)
+          new-data (if-not (and (get data ::last-db-write)
                                 (< (- (System/currentTimeMillis) (* ttl 60000))
-                                   (data '_last_db_write))
+                                   (get data ::last-db-write))
                                 (= data (read-session this key)))
-                     (assoc data '_last_db_write (System/currentTimeMillis))
+                     (assoc data ::last-db-write (System/currentTimeMillis))
                      data)]
       (when-not (= data new-data)
         (write-session-data cassandra write-q new-key new-data))

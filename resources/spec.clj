@@ -7,10 +7,12 @@
 {:http-kit {:port 8080}
  :cassandra {:config-file "cassandra.yaml"}
  :session-store {:ttl 60}
+ :kafka {:server {:port 9090
+                  :brokerid 1
+                  :log.dir "target/kafka-log"
+                  :zk.connect "localhost:2181"}
+         :producer {:serializer.class "nl.storm.MessagePackVOSerializer"
+                    :zk.connect "localhost:2181"}}
  :modules {:resolve-dependencies true
            :isolate ""}
- :config {:kafka {:port "9090"
-                  :broker-id "1"
-                  :log-dir "target/kafka-log"
-                  :zk-connect "localhost:2181"}
-          :fs {:deployments "deployments"}}}
+ :config {:fs {:deployments "deployments"}}}

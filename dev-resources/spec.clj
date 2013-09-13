@@ -7,14 +7,17 @@
 {:http-kit {:port 8080}
  :cassandra {:config-file "cassandra.yaml"}
  :session-store {:ttl 1}
+ :kafka {:server {:port 9090
+                  :brokerid 1
+                  :log.dir "target/kafka-log"
+                  :enable.zookeeper false}
+         :producer {:broker.list "1:localhost:9090"
+                    ;; :serializer.class "nl.storm.MessagePackVOSerializer"
+                    }}
  :modules {:resolve-dependencies true
            :isolates ["containium.*"
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
                       "ring.*"]
            :start-on-boot ["dev-resources/test-module/target/test-module-0.1.jar"]}
- :config {:kafka {:port "9090"
-                  :broker-id "1"
-                  :log-dir "target/kafka-log"
-                  :zk-connect "localhost:2181"}
-          :fs {:deployments "dev-resources/deployments"}}}
+ :config {:fs {:deployments "dev-resources/deployments"}}}
