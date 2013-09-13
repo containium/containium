@@ -19,6 +19,5 @@
            :isolates ["containium.*"
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
-                      "ring.*"]
-           :start-on-boot ["dev-resources/test-module/target/test-module-0.1.jar"]}
- :config {:fs {:deployments "dev-resources/deployments"}}}
+                      "ring.*"]}
+ :fs {:deployments "dev-resources/deployments"}}

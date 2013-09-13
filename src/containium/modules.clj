@@ -4,9 +4,9 @@
 
 (ns containium.modules
   "Functions for managing the starting and stopping of modules."
-  (:require [containium.systems]
-            [containium.systems.config :refer (get-config)]
-            [containium.systems.ring :refer (upstart-box remove-box)]
+  (:require [containium.systems :refer (require-system)]
+            [containium.systems.config :refer (Config get-config)]
+            [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)])
   (:import [containium.systems Startable]))
 
@@ -126,7 +126,7 @@
 
 
 (defn- agent-error-handler
-  [agent exception]
+  [agent ^Exception exception]
   (println "Exception in module agent:")
   (.printStackTrace exception))
 
@@ -167,11 +167,14 @@
     (swap! notifiers dissoc name)))
 
 
+;;--- FIXME: Implement Stoppable to make sure the module actions are done and all modules get
+;;           undeployed.
+
+
 (def default-manager
   (reify Startable
     (start [_ systems]
-      (assert (:config systems)
-              "Modules Manager needs a Config implementation in the systems map under :config.")
-      (assert (:ring systems)
-              "Modules Manager needs a Ring implementation in the systems map under :ring.")
-      (DefaultManager. (:config systems) systems (atom {}) (atom {})))))
+      (require-system Ring systems)
+      (let [config (require-system Config systems)]
+        (println "Started default Module manager.")
+        (DefaultManager. config systems (atom {}) (atom {}))))))

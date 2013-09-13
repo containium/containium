@@ -3,7 +3,7 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems.elasticsearch
-  (:require [containium.systems]
+  (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)])
   (:import [containium.systems Startable Stoppable]
            [org.elasticsearch.node Node NodeBuilder]))
@@ -17,7 +17,7 @@
 
 ;;; The embedded implementation.
 
-(defrecord EmbeddedElastic [node]
+(defrecord EmbeddedElastic [^ Node node]
   Elastic
   (whut? [_])
 
@@ -31,10 +31,7 @@
 (def embedded
   (reify Startable
     (start [_ systems]
-      (assert (:config systems) "ElasticSearch system requires a :config system.")
-      (assert (satisfies? Config (:config systems))
-              "Expected :config system to satisfy Config protocol.")
-      (let [config (get-config (:config systems) :elastic)
+      (let [config (get-config (require-system Config systems) :elastic)
             _ (println "Starting embedded ElasticSearch node, using config" config "...")
             node (.node (NodeBuilder/nodeBuilder))]
         (println "Embedded ElasticSearsch node started.")

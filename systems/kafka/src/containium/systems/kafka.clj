@@ -3,7 +3,7 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems.kafka
-  (:require [containium.systems]
+  (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (get-config Config)])
   (:import  [containium.systems Startable Stoppable]
             [kafka.server KafkaConfig KafkaServer]
@@ -49,10 +49,7 @@
 (def embedded
   (reify Startable
     (start [_ systems]
-      (assert (:config systems) "Kafka system requires a :config system.")
-      (assert (satisfies? Config (:config systems))
-              "Expected :config system to satisfy Config protocol.")
-      (let [config (get-config (:config systems) :kafka)
+      (let [config (get-config (require-system Config systems) :kafka)
             _ (println "Starting embedded Kafka using config:" config)
             server-properties (map->properties (:server config))
             server (doto (KafkaServer. (KafkaConfig. server-properties)) .startup)

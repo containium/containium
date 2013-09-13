@@ -9,7 +9,7 @@
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
             [containium.systems.ring-session-cassandra :as cass-session]
-            ;; [containium.systems.fs-deploy :as fs]
+            [containium.deployer :as deployer]
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [clojure.java.io :refer (resource as-file)]
@@ -207,8 +207,7 @@
                          :ring ring/http-kit
                          :session-store cass-session/embedded
                          :modules modules/default-manager
-                         ;; :fs fs/system
-                         ]
+                         :fs deployer/directory ]
     (run systems))
   (shutdown-agents)
   (shutdown-timer 10))

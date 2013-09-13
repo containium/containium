@@ -4,8 +4,8 @@
 
 (ns containium.systems.cassandra
   "Functions for starting and stopping an embedded Cassandra instance."
-  (:require [containium.systems]
-            [containium.systems.config :refer (get-config)]
+  (:require [containium.systems :refer (require-system)]
+            [containium.systems.config :refer (Config get-config)]
             [clojure.java.io :refer (copy)])
   (:import [containium.systems Startable Stoppable]
            [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
@@ -103,8 +103,8 @@
 (def embedded12
   (reify Startable
     (start [_ systems]
-      (let [config (get-config (:config systems) :cassandra)]
-        (println "Starting embedded Cassandra using config" config)
+      (let [config (get-config (require-system Config systems) :cassandra)]
+        (println "Starting embedded Cassandra, using config" config "...")
         (System/setProperty "cassandra.config" (:config-file config))
         (System/setProperty "cassandra-foreground" "false")
         (let [daemon (CassandraDaemon.)

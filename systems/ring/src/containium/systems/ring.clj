@@ -5,8 +5,8 @@
 (ns containium.systems.ring
   "The interface definition of the Ring system. The Ring system offers
   an API to a ring server."
-  (:require [containium.systems]
-            [containium.systems.config :refer (get-config)]
+  (:require [containium.systems :refer (require-system)]
+            [containium.systems.config :refer (Config get-config)]
             [org.httpkit.server :refer (run-server)]
             [boxure.core :as boxure])
   (:import [containium.systems Startable Stoppable]))
@@ -136,7 +136,8 @@
 (def http-kit
   (reify Startable
     (start [_ systems]
-      (let [app (atom (make-app {}))
+      (let [config (require-system Config systems)
+            app (atom (make-app {}))
             app-fn (fn [request] (@app request))
-            stop-fn (run-server app-fn (get-config (:config systems) :http-kit))]
+            stop-fn (run-server app-fn (get-config config :http-kit))]
         (HttpKit. stop-fn app (atom {}))))))

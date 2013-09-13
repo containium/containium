@@ -65,6 +65,18 @@
      (with-systems* ~symbol ~(partition 2 system-components) ~body)))
 
 
+(defn require-system
+  "Given a protocol, returns the single system in the systems map that
+  satisfies that protocol. If no such system exists, or multiple
+  exist, an exception is thrown."
+  [protocol systems]
+  (let [impls (filter (comp (partial satisfies? protocol) val) systems)]
+    (if (= 1 (count impls))
+      (val (first impls))
+      (throw (Exception. (str (if (seq impls) "Multiple" "No")
+                              " systems found satisfying protocol " protocol))))))
+
+
 (defmacro protocol-forwarder
   "Reifies a protocol that forwards all calls to an existing
   implementation. For example:

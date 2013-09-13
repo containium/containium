@@ -5,9 +5,10 @@
 (ns containium.systems.ring-session-cassandra
   "This namespace contains the Containium system offering a Ring
   SessionStore backed by Cassandra and Nippy."
-  (:require [containium.systems]
-            [containium.systems.config :refer (get-config)]
-            [containium.systems.cassandra :refer (prepare do-prepared bytebuffer->bytes)]
+  (:require [containium.systems :refer (require-system)]
+            [containium.systems.config :refer (Config get-config)]
+            [containium.systems.cassandra :refer (EmbeddedCassandra prepare do-prepared
+                                                                   bytebuffer->bytes)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.core.cache :refer (ttl-cache-factory)])
@@ -78,16 +79,15 @@
 (def embedded
   (reify Startable
     (start [_ systems]
-      (assert (:embedded-cassandra systems)
-              "The embedded Cassandra Ring session store requires a :embedded-cassandra system.")
-      (assert (:config systems)
-              "The embedded Cassandra Ring session store requires a :config system.")
-      (let [cassandra (:embedded-cassandra systems)
-            config (get-config (:config systems) :session-store)
+      (let [cassandra (require-system EmbeddedCassandra systems)
+            config (get-config (require-system Config systems) :session-store)
+            _ (println "Starting embedded Cassandra Ring session store, using config"
+                       config "...")
             ttl (:ttl config)
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* ttl 60 2)
                                             " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
+        (println "Embedded Cassandra Ring session store started.")
         (EmbeddedCassandraStore. (atom (ttl-cache-factory {} :ttl (* ttl 60000)))
                                  ttl cassandra read-q write-q remove-q)))))
