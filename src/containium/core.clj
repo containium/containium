@@ -201,7 +201,7 @@
 (defn -main
   [& args]
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
-                         :embedded-cassandra cassandra/embedded12
+                         :cassandra cassandra/embedded12
                          :elastic elastic/embedded
                          :kafka kafka/embedded
                          :ring ring/http-kit

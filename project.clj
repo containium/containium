@@ -31,3 +31,5 @@
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
   :global-vars {*warn-on-reflection* true})
+
+;;; Sync this file with pom.xml.
