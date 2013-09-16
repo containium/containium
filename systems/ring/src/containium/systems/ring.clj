@@ -153,7 +153,10 @@
     (Exception. "Cannot be used on a test HTTP-Kit implementation."))
 
   Stoppable
-  (stop [_] (stop-fn)))
+  (stop [_]
+    (println "Stopping test HTTP-Kit server...")
+    (stop-fn)
+    (println "Stopped test HTTP-Kit server.")))
 
 
 (defn test-http-kit
@@ -163,6 +166,8 @@
   [handler]
   (reify Startable
     (start [_ systems]
-      (let [config (require-system Config systems)
+      (let [config (get-config (require-system Config systems) :http-kit)
+            _ (println "Starting test HTTP-Kit, using config" config "...")
             stop-fn (run-server handler (get-config config :http-kit))]
+        (println "Started test HTTP-Kit.")
         (TestHttpKit. stop-fn)))))
