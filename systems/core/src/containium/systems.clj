@@ -74,7 +74,7 @@
     (if (= 1 (count impls))
       (val (first impls))
       (throw (Exception. (str (if (seq impls) "Multiple" "No")
-                              " systems found satisfying protocol " protocol))))))
+                              " systems found satisfying protocol " (:on protocol)))))))
 
 
 (defmacro protocol-forwarder

@@ -141,3 +141,28 @@
             app-fn (fn [request] (@app request))
             stop-fn (run-server app-fn (get-config config :http-kit))]
         (HttpKit. stop-fn app (atom {}))))))
+
+
+;;; HTTP-Kit implementation for testing.
+
+(defrecord TestHttpKit [stop-fn]
+  Ring
+  (upstart-box [_ _ _]
+    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
+  (remove-box [_ _]
+    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
+
+  Stoppable
+  (stop [_] (stop-fn)))
+
+
+(defn test-http-kit
+  "Create a simple HTTP-kit server, serving the specified ring handler
+  function. This function returns a Startable, requiring a Config
+  system to be available when started."
+  [handler]
+  (reify Startable
+    (start [_ systems]
+      (let [config (require-system Config systems)
+            stop-fn (run-server handler (get-config config :http-kit))]
+        (TestHttpKit. stop-fn)))))
