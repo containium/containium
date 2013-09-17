@@ -4,9 +4,11 @@
 
 (ns containium.systems.cassandra
   "Functions for starting and stopping an embedded Cassandra instance."
+  (:refer-clojure :exclude (replace))
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [clojure.java.io :refer (copy)])
+            [clojure.java.io :refer (copy)]
+            [clojure.string :refer (replace split)])
   (:import [containium.systems Startable Stoppable]
            [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
@@ -22,8 +24,21 @@
 ;;; The public API for embedded Cassandra systems.
 
 (defprotocol EmbeddedCassandra
-  (prepare [this query])
-  (do-prepared [this prepared consistency args]))
+  (prepare [this query]
+    "Returns a CQLStatment that contains the prepared query String.")
+
+  (do-prepared [this prepared consistency args]
+    "Executes a prepared CQLStatement. Consistency is one of :any, :one,
+  :two, :three, :quorum, :all, :local-quorum or :each-quorum. The args
+  argument is a sequence containing the position arguments for the
+  query.")
+
+  (has-keyspace? [this name]
+    "Returns a boolean indicating whether the named keyspace exists.")
+
+  (write-schema [this schema-str]
+    "Writes a CQL schema String to the database. Comments are filtered
+  out automatically and the statements are executed in sequence."))
 
 
 (defn bytebuffer->inputstream
@@ -67,13 +82,28 @@
     primitive))
 
 
-(defrecord EmbeddedCassandra12 [daemon thread client-state query-state]
+(defn- cql-statements
+  "Returns the CQL statements from the specified String in a sequence."
+  [s]
+  (let [no-comments (-> s
+                        (replace #"(?s)/\*.*?\*/" "")
+                        (replace #"--.*$" "")
+                        (replace #"//.*$" ""))]
+    (map #(str % ";") (split no-comments #"\s*;\s*"))))
+
+
+(defn- prepare*
+  [client-state query]
+  (-> query
+      (QueryProcessor/prepare client-state false)
+      .statementId
+      QueryProcessor/getPrepared))
+
+
+(defrecord EmbeddedCassandra12 [daemon thread client-state query-state keyspace-q]
   EmbeddedCassandra
   (prepare [_ query]
-    (-> query
-        (QueryProcessor/prepare client-state false)
-        .statementId
-        QueryProcessor/getPrepared))
+    (prepare* client-state query))
 
   (do-prepared [_ prepared consistency args]
     (let [consistency (case consistency
@@ -89,6 +119,14 @@
                                                  (map ->bytebuffer args))]
       (when (instance? ResultMessage$Rows result)
         (UntypedResultSet. (.result ^ResultMessage$Rows result)))))
+
+  (has-keyspace? [this name]
+    (not (.isEmpty (do-prepared this keyspace-q :one [name]))))
+
+  (write-schema [this schema-str]
+    (doseq [s (cql-statements schema-str)
+            :let [ps (prepare this s)]]
+      (do-prepared this ps :one [])))
 
   Stoppable
   (stop [this]
@@ -110,10 +148,12 @@
         (let [daemon (CassandraDaemon.)
               thread (Thread. #(.activate daemon))
               client-state (ClientState. true)
+              keyspace-q (prepare* client-state
+                                   "SELECT * FROM system.schema_keyspaces WHERE keyspace_name = ?;")
               query-state (QueryState. client-state)]
           (.setDaemon thread true)
           (.start thread)
           (println "Waiting for Cassandra to be fully started...")
           (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
           (println "Cassandra fully started.")
-          (EmbeddedCassandra12. daemon thread client-state query-state))))))
+          (EmbeddedCassandra12. daemon thread client-state query-state keyspace-q))))))

@@ -8,10 +8,12 @@
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.cassandra :refer (EmbeddedCassandra prepare do-prepared
+                                                                   has-keyspace? write-schema
                                                                    bytebuffer->bytes)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
-            [clojure.core.cache :refer (ttl-cache-factory)])
+            [clojure.core.cache :refer (ttl-cache-factory)]
+            [clojure.java.io :refer (resource)])
   (:import [containium.systems Startable]
            [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
            [java.util UUID]))
@@ -52,7 +54,7 @@
 
   (write-session [this key data]
     ;; Create a key, if necessary.
-    ;; Update the data in the database, except if it already contains a _last_db_write entry,
+    ;; Update the data in the database, except if it already contains a ::last_db_write entry,
     ;; and the time it specifies is younger than the current time minus TTL,
     ;; and the session data has not changed within the handling of the request.
     (let [new-key (or key (str (UUID/randomUUID)))
@@ -76,6 +78,13 @@
     nil))
 
 
+(defn- ensure-schema
+  [cassandra]
+  (when-not (has-keyspace? cassandra "ring")
+    (println "No `ring` keyspace detected; writing schema.")
+    (write-schema cassandra (slurp (resource "cassandra-session-store.cql")))))
+
+
 (def embedded
   (reify Startable
     (start [_ systems]
@@ -83,6 +92,7 @@
             config (get-config (require-system Config systems) :session-store)
             _ (println "Starting embedded Cassandra Ring session store, using config"
                        config "...")
+            _ (ensure-schema cassandra)
             ttl (:ttl config)
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* ttl 60 2)
