@@ -168,6 +168,6 @@
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :http-kit)
             _ (println "Starting test HTTP-Kit, using config" config "...")
-            stop-fn (run-server handler (get-config config :http-kit))]
+            stop-fn (run-server handler config)]
         (println "Started test HTTP-Kit.")
         (TestHttpKit. stop-fn)))))
