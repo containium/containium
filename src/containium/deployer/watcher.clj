@@ -81,7 +81,7 @@
                        (if-let [^WatchKey key (.poll watchservice 500 TimeUnit/MILLISECONDS)]
                          (do (doseq [^WatchEvent event (.pollEvents key)]
                                (when-not (= (.kind event) StandardWatchEventKinds/OVERFLOW)
-                                 (handler-fn  event)))
+                                 (future (handler-fn event))))
                              (.reset key))
                          :continue)
                        (catch ClosedWatchServiceException cwse

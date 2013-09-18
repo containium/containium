@@ -61,8 +61,9 @@
 
 (defn- send-to-module
   [manager name f & args]
-  (let [agent (get @(:agents manager) name)]
-    (apply send agent f args)))
+  (if-let [agent (get @(:agents manager) name)]
+    (apply send agent f args)
+    (println "No module named" name "available.")))
 
 
 (defn- do-deploy
@@ -151,14 +152,18 @@
       promise))
 
   (undeploy! [this name]
-    (let [promise (promise)]
-      (send-to-module this name handle-undeploy this promise)
-      promise))
+    (if (@agents name)
+      (let [promise (promise)]
+        (send-to-module this name handle-undeploy this promise)
+        promise)
+      (delay (Response. false (str "No module named " name " known.")))))
 
   (redeploy! [this name]
-    (let [promise (promise)]
-      (send-to-module this name handle-redeploy this promise)
-      promise))
+    (if (@agents name)
+      (let [promise (promise)]
+        (send-to-module this name handle-redeploy this promise)
+        promise)
+      (delay (Response. false (str "No module named " name " known.")))))
 
   (register-notifier! [_ name f]
     (swap! notifiers assoc name f))

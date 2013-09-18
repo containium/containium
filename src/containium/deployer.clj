@@ -30,12 +30,18 @@
 
 (defn- handle-event
   [manager dir kind ^Path path]
-  (let [file-name (.. path getFileName toString)]
+  (let [file-name (.. path getFileName toString)
+        timeout (* 1000 60)]
     (when-not (re-matches #".*\.status" file-name)
-      (case kind
-        :create (prn @(deploy! manager file-name (file dir (.toFile path))))
-        :modify (prn @(redeploy! manager file-name))
-        :delete (prn @(undeploy! manager file-name))))))
+      (let [response (case kind
+                       :create (deref (deploy! manager file-name (file dir (.toFile path)))
+                                      timeout ::timeout)
+                       :modify (deref (redeploy! manager file-name) timeout ::timeout)
+                       :delete (deref (undeploy! manager file-name) timeout ::timeout))]
+        (if (= ::timeout response)
+          (println "Response for deployer action for" file-name "timed out."
+                   "\nThe action may have failed or may still complete.")
+          (println "Deployer action for" file-name ":" (:message response)))))))
 
 
 (defrecord DirectoryDeployer [manager ^File dir watcher]
