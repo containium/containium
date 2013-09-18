@@ -16,7 +16,7 @@
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]
-            [clojure.pprint :refer (pprint)])
+            [clojure.pprint :refer (pprint print-table)])
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask]))
 
@@ -84,7 +84,7 @@
   (let [[action name path] args
         timeout (* 1000 60)]
     (case action
-      "list" (println (modules/list-active (:modules systems))) ; Improve this
+      "list" (print-table (modules/list-active (:modules systems)))
       "deploy" (if (and name path)
                  (future (println (:message (deref (modules/deploy! (:modules systems) name
                                                                     (as-file path))

@@ -8,14 +8,15 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)])
-  (:import [containium.systems Startable]))
+  (:import [containium.systems Startable Stoppable]))
 
 
 ;;; Public system definitions.
 
 (defprotocol Manager
   (list-active [this]
-    "Returns a map of name-state entries for the currently active modules.")
+    "Returns a sequence of maps with :name and :state entries for the
+  currently active modules.")
 
   (deploy! [this name file]
     "Try to deploy the file under the specified name. A promise is
@@ -74,23 +75,35 @@
     (do (when (-> box :project :containium :ring)
           (upstart-box (-> manager :systems :ring) name box))
         (send-to-module manager name
-                        #(do (deliver promise (Response. true "Module successfully deployed."))
+                        #(do (deliver promise (Response. true (str "Module " name
+                                                                   " successfully deployed.")))
                              (notify manager :deployed name file)
                              (assoc % :state :deployed :file file :box box))))
     (send-to-module manager name
-                    #(do (deliver promise (Response. false "Error while deploying module."))
+                    #(do (deliver promise (Response. false (str "Error while deploying module "
+                                                                name ".")))
                          (notify manager :failed name)
                          (assoc % :state :undeployed)))))
 
 
 (defn- handle-deploy
-  [module manager file promise]
+  [{:keys [name] :as module} manager file promise]
   (case (:state module)
-    :deploying (do (deliver promise (Response. false "Module is already deploying.")) module)
-    :deployed (do (deliver promise (Response. false "Module is already deployed.")) module)
-    :redeploying (do (deliver promise (Response. false "Module is currently redeploying.")) module)
-    :swapping (do (deliver promise (Response. false "Module is currently swapping.")) module)
-    :undeploying (do (deliver promise (Response. false "Module is currently undeploying.")) module)
+    :deploying (do (deliver promise
+                            (Response. false (str "Module " name " is already deploying.")))
+                   module)
+    :deployed (do (deliver promise
+                           (Response. false (str "Module " name " is already deployed.")))
+                  module)
+    :redeploying (do (deliver promise
+                              (Response. false (str "Module " name " is currently redeploying.")))
+                     module)
+    :swapping (do (deliver promise
+                           (Response. false (str "Module is " name " currently swapping.")))
+                  module)
+    :undeploying (do (deliver promise
+                              (Response. false (str "Module " name " is currently undeploying.")))
+                     module)
     :undeployed (do (do-deploy manager module file promise)
                     (assoc module :state :deploying))))
 
@@ -100,8 +113,8 @@
   (let [response (if (do (when (-> box :project :containium :ring)
                            (remove-box (-> manager :systems :ring) name))
                          (stop-box name box))
-                   (Response. true "Module successfully undeployed.")
-                   (Response. false "Error while undeploying module."))]
+                   (Response. true (str "Module " name " successfully undeployed."))
+                   (Response. false (str "Error while undeploying module " name ".")))]
     (send-to-module manager name
                     #(do (deliver promise response)
                          (notify manager :undeployed name)
@@ -109,13 +122,23 @@
 
 
 (defn- handle-undeploy
-  [module manager promise]
+  [{:keys [name] :as module} manager promise]
   (case (:state module)
-    :deploying (do (deliver promise (Response. false "Module is currently deploying.")) module)
-    :redeploying (do (deliver promise (Response. false "Module is currently redeploying.")) module)
-    :swapping (do (deliver promise (Response. false "Module is currently swapping.")) module)
-    :undeploying (do (deliver promise (Response. false "Module is already undeploying.")) module)
-    :undeployed (do (deliver promise (Response. false "Module is already undeployed.")) module)
+    :deploying (do (deliver promise
+                            (Response. false (str "Module " name " is currently deploying.")))
+                   module)
+    :redeploying (do (deliver promise
+                              (Response. false (str "Module " name " is currently redeploying.")))
+                     module)
+    :swapping (do (deliver promise
+                           (Response. false (str "Module " name " is currently swapping.")))
+                  module)
+    :undeploying (do (deliver promise
+                              (Response. false (str "Module " name " is already undeploying.")))
+                     module)
+    :undeployed (do (deliver promise
+                             (Response. false (str "Module " name " is already undeployed.")))
+                    module)
     :deployed (do (do-undeploy manager module promise)
                   (assoc module :state :undeploying))))
 
@@ -135,10 +158,10 @@
 (defrecord DefaultManager [config systems agents notifiers]
   Manager
   (list-active [_]
-    (into {} (keep (fn [[name agent]]
+    (into [] (keep (fn [[name agent]]
                      (let [state (:state @agent)]
                        (when (not= :undeployed state)
-                         [name state])))
+                         {:name name :state state})))
                    @agents)))
 
   (deploy! [this name file]
@@ -156,24 +179,33 @@
       (let [promise (promise)]
         (send-to-module this name handle-undeploy this promise)
         promise)
-      (delay (Response. false (str "No module named " name " known.")))))
+      (future (Response. false (str "No module named " name " known.")))))
 
   (redeploy! [this name]
     (if (@agents name)
       (let [promise (promise)]
         (send-to-module this name handle-redeploy this promise)
         promise)
-      (delay (Response. false (str "No module named " name " known.")))))
+      (future (Response. false (str "No module named " name " known.")))))
 
   (register-notifier! [_ name f]
     (swap! notifiers assoc name f))
 
   (unregister-notifier! [_ name]
-    (swap! notifiers dissoc name)))
+    (swap! notifiers dissoc name))
 
-
-;;--- FIXME: Implement Stoppable to make sure the module actions are done and all modules get
-;;           undeployed.
+  Stoppable
+  (stop [this]
+    (if-let [to-undeploy (seq (remove #(= :undeployed (:state (deref (val %)))) @agents))]
+      (let [names+promises (for [[name agent] to-undeploy] [name (undeploy! this name)])
+            timeout (* 1000 30)]
+        (doseq [[name promise] names+promises]
+          (println (:message (deref promise timeout
+                                    (Response. false (str "Response for undeploying " name
+                                                          " timed out."))))))
+        (Thread/sleep 1000)
+        (recur))
+      (println "All modules are undeployed."))))
 
 
 (def default-manager
