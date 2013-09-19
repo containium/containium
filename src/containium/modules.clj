@@ -67,6 +67,12 @@
     (println "No module named" name "available.")))
 
 
+(defn- invalid-state
+  [{:keys [name] :as module} promise occupation-str]
+  (deliver promise (Response. false (str "Module " name " is " occupation-str ".")))
+  module)
+
+
 (defn- do-deploy
   [manager {:keys [name] :as module} file promise]
   (if-let [box (start-box name file
@@ -87,23 +93,13 @@
 
 
 (defn- handle-deploy
-  [{:keys [name] :as module} manager file promise]
-  (case (:state module)
-    :deploying (do (deliver promise
-                            (Response. false (str "Module " name " is already deploying.")))
-                   module)
-    :deployed (do (deliver promise
-                           (Response. false (str "Module " name " is already deployed.")))
-                  module)
-    :redeploying (do (deliver promise
-                              (Response. false (str "Module " name " is currently redeploying.")))
-                     module)
-    :swapping (do (deliver promise
-                           (Response. false (str "Module is " name " currently swapping.")))
-                  module)
-    :undeploying (do (deliver promise
-                              (Response. false (str "Module " name " is currently undeploying.")))
-                     module)
+  [{:keys [name state] :as module} manager file promise]
+  (case state
+    :deploying (invalid-state module promise "already deploying.")
+    :deployed (invalid-state module promise "already deployed.")
+    :redeploying (invalid-state module promise "currently redeploying.")
+    :swapping (invalid-state module promise "currently swapping.")
+    :undeploying (invalid-state module promise "currently undeploying.")
     :undeployed (do (future (do-deploy manager module file promise))
                     (notify manager :deploying name)
                     (assoc module :state :deploying))))
@@ -123,32 +119,52 @@
 
 
 (defn- handle-undeploy
-  [{:keys [name] :as module} manager promise]
-  (case (:state module)
-    :deploying (do (deliver promise
-                            (Response. false (str "Module " name " is currently deploying.")))
-                   module)
-    :redeploying (do (deliver promise
-                              (Response. false (str "Module " name " is currently redeploying.")))
-                     module)
-    :swapping (do (deliver promise
-                           (Response. false (str "Module " name " is currently swapping.")))
-                  module)
-    :undeploying (do (deliver promise
-                              (Response. false (str "Module " name " is already undeploying.")))
-                     module)
-    :undeployed (do (deliver promise
-                             (Response. false (str "Module " name " is already undeployed.")))
-                    module)
+  [{:keys [name state] :as module} manager promise]
+  (case state
+    :deploying (invalid-state module promise "currently deploying.")
+    :redeploying (invalid-state module promise "currently redeploying.")
+    :swapping (invalid-state module promise "currently swapping.")
+    :undeploying (invalid-state module promise "already undeploying.")
+    :undeployed (invalid-state module promise "already undeployed.")
     :deployed (do (future (do-undeploy manager module promise))
                   (notify manager :undeploying name)
                   (assoc module :state :undeploying))))
 
 
+(defn- do-redeploy
+  [manager {:keys [name file] :as module} promise]
+  (let [timeout (* 1000 30)
+        {:keys [success message] :as response} (deref (undeploy! manager name) timeout ::timeout)]
+    (if success
+      (let [{:keys [success message] :as response} (deref (deploy! manager name file)
+                                                          timeout ::timeout)]
+        (if success
+          (deliver promise (Response. true (str "Module " name " successfully redeployed.")))
+          (if (= response ::timeout)
+            (deliver promise (Response. false (str "Response for deployment while redeploying "
+                                                   "timed out. Deploying may still succeed.")))
+            (deliver promise (Response. false (str "Error while redeploying module " name
+                                                   ", reason: " message))))))
+      (if (= response ::timeout)
+        (deliver promise (Response. false (str "Response for undeployment while redeploying "
+                                               "timed out. Undeploying may still succeed.")))
+        (deliver promise (Response. false (str "Error while redeploying module " name
+                                                    ", reason: " message)))))))
+
+
 (defn- handle-redeploy
-  [module manager promise]
-  (deliver promise (Response. false "Redeployments are not implemented yet."))
-  module)
+  [{:keys [name state] :as module} manager promise]
+  (case state
+    :deploying (invalid-state module promise "already deploying")
+    :redeploying (invalid-state module promise "already redeploying")
+    :swapping (invalid-state module promise "already swapping")
+    :undeploying (invalid-state module promise "currently undeploying")
+    :undeployed (invalid-state module promise "undeployed, so cannot be redeployed")
+    :deployed (do (future (do-redeploy manager module promise))
+                  (notify manager :redeploying name)
+                  ;; (assoc module :state :redeploying)
+                  ;; --- TODO, above will be possible when queuing is implemented.
+                  module)))
 
 
 (defn- agent-error-handler

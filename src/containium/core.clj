@@ -44,9 +44,9 @@
   [_ _ _]
   (println (str "Available commands are:"
                 "\n"
-                "\n module <list|deploy|undeploy> [name [path]]"
+                "\n module <list|deploy|undeploy|redeploy> [name [path]]"
                 "\n   Prints a list of running modules, deploys a module by name and path, or"
-                "\n   undeploys a module by name."
+                "\n   undeploys/redeploys a module by name."
                 "\n"
                 "\n repl <start|stop> [port]"
                 "\n   Starts an nREPL at the specified port, or stops the current one, inside"
@@ -96,6 +96,12 @@
                    (future (println (:message (deref (modules/undeploy! (:modules systems) name)
                                                      timeout
                                                      {:message (str "Undeployment of " name
+                                                                    " timed out.")}))))
+                   (println "Missing name argument."))
+      "redeploy" (if name
+                   (future (println (:message (deref (modules/redeploy! (:modules systems) name)
+                                                     timeout
+                                                     {:message (str "Redeployment of " name
                                                                     " timed out.")}))))
                    (println "Missing name argument."))
       (if action

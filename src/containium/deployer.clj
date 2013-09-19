@@ -39,9 +39,9 @@
                        :modify (deref (redeploy! manager file-name) timeout ::timeout)
                        :delete (deref (undeploy! manager file-name) timeout ::timeout))]
         (if (= ::timeout response)
-          (println "Response for deployer action for" file-name "timed out."
+          (println "Response for file system deployer action for" file-name "timed out."
                    "\nThe action may have failed or may still complete.")
-          (println "Deployer action for" file-name ":" (:message response)))))))
+          (println "File system deployer action for" file-name ":" (:message response)))))))
 
 
 (defrecord DirectoryDeployer [manager ^File dir watcher]
