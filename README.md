@@ -29,12 +29,12 @@ For a module to be deployable in Containium, it needs to have a `:containium` co
 
 - `:stop`, this mandatory entry has a namespace qualified symbol as its value, pointing to the stop function of the module. This function takes the return value of the start function as its argument. (**MAYBE I MAKE THIS ENTRY OPTIONAL, AS NOT EVERY MODULE NEEDS IT. ON THE OTHER HAND, HAVING IT MANDATORY MAKES ONE THINK EXPLICITLY ABOUT CLEANING UP RESOURCES.**)
 
-- `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optially, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified. Also note that when a module with a Ring app is deployed, the handler is automatically registered in the root Ring server, i.e. one does not have to do this oneself.
+- `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optionally, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified. Also note that when a module with a Ring app is deployed, the handler is automatically registered in the root Ring server, i.e. one does not have to do this oneself.
 
 
 ## Using Containium as a library
 
-Modules use the systems offered by Containium. Containium has been designed in such a way, that developing and testing these modules can be done without having to run Containium. When Containium is run, it is just running a default and integrated setup of root systems using the `containium.systems/with-systems` macro (and adding some other benifits, such as the command loop).
+Modules use the systems offered by Containium. Containium has been designed in such a way, that developing and testing these modules can be done without having to run Containium. When Containium is run, it is just running a default and integrated setup of root systems using the `containium.systems/with-systems` macro (and adding some other benefits, such as the command loop).
 
 When developing or running the modules standalone, one can easily simulate the Containium, by using the `with-systems` macro. This way, one has full control of what systems are started, how they are configured, et cetera.
 
@@ -59,7 +59,7 @@ For an example module, one could have the following `example_module/core.clj` fi
 (defn start [systems]
   ;; First it is good to test whether a :session-store system is available.
   (assert (:session-store systems) "Test module requires a :session-store system.")
-  ;; Use the protocol-forwarder to use systems from within a Boxure box.
+  ;; Use the protocol-forwarder to use systems (which in turn use clojure protocols) from within a Boxure box.
   (let [session-store ((protocol-forwarder SessionStore) (:session-store systems))]
     (alter-var-root #'app #(wrap-session % {:store session-store}))))
 
