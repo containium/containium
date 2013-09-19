@@ -59,7 +59,8 @@ For an example module, one could have the following `example_module/core.clj` fi
 (defn start [systems]
   ;; First it is good to test whether a :session-store system is available.
   (assert (:session-store systems) "Test module requires a :session-store system.")
-  ;; Use the protocol-forwarder to use systems (which in turn use clojure protocols) from within a Boxure box.
+  ;; Use the protocol-forwarder to use systems (which in turn use clojure protocols)
+  ;; from within a Boxure box.
   (let [session-store ((protocol-forwarder SessionStore) (:session-store systems))]
     (alter-var-root #'app #(wrap-session % {:store session-store}))))
 
