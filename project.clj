@@ -30,6 +30,19 @@
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
-  :global-vars {*warn-on-reflection* true})
+  :global-vars {*warn-on-reflection* true}
+  :plugins [[codox "0.6.6"]]
+  :codox {:output-dir "codox"
+          :src-dir-uri "https://github.com/containium/blob/master/containium/"
+          :src-linenum-anchor-prefix "L"
+          :include [containium.systems
+                    containium.systems.cassandra
+                    containium.systems.config
+                    containium.deployer
+                    containium.systems.elasticsearch
+                    containium.systems.kafka
+                    containium.modules
+                    containium.systems.repl
+                    containium.systems.ring]})
 
 ;;; Sync this file with pom.xml.

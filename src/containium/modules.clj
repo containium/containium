@@ -104,7 +104,8 @@
     :undeploying (do (deliver promise
                               (Response. false (str "Module " name " is currently undeploying.")))
                      module)
-    :undeployed (do (do-deploy manager module file promise)
+    :undeployed (do (future (do-deploy manager module file promise))
+                    (notify manager :deploying name)
                     (assoc module :state :deploying))))
 
 
@@ -139,7 +140,8 @@
     :undeployed (do (deliver promise
                              (Response. false (str "Module " name " is already undeployed.")))
                     module)
-    :deployed (do (do-undeploy manager module promise)
+    :deployed (do (future (do-undeploy manager module promise))
+                  (notify manager :undeploying name)
                   (assoc module :state :undeploying))))
 
 
@@ -158,11 +160,11 @@
 (defrecord DefaultManager [config systems agents notifiers]
   Manager
   (list-active [_]
-    (into [] (keep (fn [[name agent]]
-                     (let [state (:state @agent)]
-                       (when (not= :undeployed state)
-                         {:name name :state state})))
-                   @agents)))
+    (keep (fn [[name agent]]
+            (let [state (:state @agent)]
+              (when (not= :undeployed state)
+                {:name name :state state})))
+          @agents))
 
   (deploy! [this name file]
     (swap! agents (fn [current name]

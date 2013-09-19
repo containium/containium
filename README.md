@@ -1,92 +1,140 @@
 # Containium
 
-Containium is an application server that ties our systems and modules together. It uses Boxure for horizontal isolation of modules. That means, systems are loaded and run in the "root", whereas modules are loaded and run inside Boxure boxes. This way, modules do not interfere with each other, can be reloaded, and may use the systems in the root.
+An application server as a library for Clojure.
 
 
-## Configuration
+## Concepts
 
-### Containium configuration
+Containium is an application server that ties shared root systems and redeployable modules together. It uses the Boxure library for horizontal isolation of modules. That means, systems that are shared among the modules are loaded and run in the "root", whereas modules are loaded and run inside Boxure boxes. This way, modules do not interfere with each other, can be reloaded, but can still use the systems in the root.
 
-Containium expects a `spec.clj` file to be available as a resource (i.e., on the classpath). This file contains EDN data, holding a map of configuration properties. The following properties are currently supported:
-
-- `:config`, contains a map with keywords corresponding to keywords used to identify the systems. The value of those entries are passed to the system when started.
-
-- `:modules`, a vector of modules loaded at startup. This may change to some other construct.
-
-- `:resolve-dependencies`, a boolean that controls whether the dependencies for modules need to be resolved or are expected to be included in the module jar.
+Containium does not need to be run as an application though. It is also suitable as a library. This way, one can develop and test modules without them being deployed, while still making use of the root systems Containium offers.
 
 
-### Systems configuration
+### Systems
 
-The following sections describe the configuration of the systems inside Containium. These configs are expected to be inside the `:config` entry in the `spec.clj` file.
+The systems are the the components that are shared between the modules. When Containium is run as an application, they are started automatically before the modules get deployed, and stopped when Containium has gotten the signal to shut down.
 
+Each system implements a protocol. This protocol defines the public API of the system. Multiple actual implementations of this protocol may exist. For example, some systems offer an implementation suitable for module testing and development.
 
-#### Cassandra
-
-The Cassandra system is identified with the `:cassandra` keyword, and the configuration should be a map holding the following entries:
-
-- `:config-file`, a String holding the name of the configuration file that should be available as a resource (i.e, on the classpath).
+Look in the Codex documentation  for the current systems' APIs.
 
 
-#### ElasticSearch
+### Modules
 
-The ElasticSearch system is identified with the `:elastic` keyword, but has no configuration at the moment.
+Modules are the components that are isolated from each other, and can be undeployed and redeployed as much as one would like. Each module uses most of the Clojure runtime in the Containium root, except for the stateful parts, e.g. the namespaces and their definitions.
 
+For a module to be deployable in Containium, it needs to have a `:containium` configuration map in the `project.clj` file. This map may contain the following entries:
 
-#### Kafka
+- `:start`, this mandatory entry has a namespace qualified symbol as its value, pointing to the start function of the module. This function takes a map with systems as its sole argument (**THIS MAY CHANGE IN THE NEAR FUTURE. I'M THINKING OF ADDING THE `:containium` CONFIG OF ITSELF AS AN ARGUMENT AS WELL, AS DEPLOYING `.clj` FILES (see further down) MAY INFLUENCE THIS CONFIG**). The function should return something that will be used as the argument to the stop function of the module (see next point).
 
-The Kafka system is identified with the `:kafka` keyword, and the configuration should be a map holding the following entries:
+- `:stop`, this mandatory entry has a namespace qualified symbol as its value, pointing to the stop function of the module. This function takes the return value of the start function as its argument. (**MAYBE I MAKE THIS ENTRY OPTIONAL, AS NOT EVERY MODULE NEEDS IT. ON THE OTHER HAND, HAVING IT MANDATORY MAKES ONE THINK EXPLICITLY ABOUT CLEANING UP RESOURCES.**)
 
-- `:port`, a String holding the port number of the Kafka broker.
-
-- `:broker-id`, a String holding the broker ID.
-
-- `:log-dir`, a String holding the path to the message log.
-
-- `:zk-connect`, a String holding the host:port of zookeeper.
+- `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optially, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified. Also note that when a module with a Ring app is deployed, the handler is automatically registered in the root Ring server, i.e. one does not have to do this oneself.
 
 
-#### HTTP Kit
+## Using Containium as a library
 
-The HTTP Kit system is identified with the `:http-kit` keyword, and the configuration should be a map holding the configuration as should be supplied to the `run-server` function of HTTP Kit. See more on this map [here](http://http-kit.org/server.html).
+Modules use the systems offered by Containium. Containium has been designed in such a way, that developing and testing these modules can be done without having to run Containium. When Containium is run, it is just running a default and integrated setup of root systems using the `containium.systems/with-systems` macro (and adding some other benifits, such as the command loop).
 
+When developing or running the modules standalone, one can easily simulate the Containium, by using the `with-systems` macro. This way, one has full control of what systems are started, how they are configured, et cetera.
 
-#### Shared Ring session store
+For an example module, one could have the following `example_module/core.clj` file:
 
-The session store is identified with the `:session-store` keyword, and the configuration should be a map holding the following entries:
+```clojure
+(ns example-module.core
+  (:require [containium.systems :refer (with-systems protocol-forwarder)]
+            [containium.systems.config :refer (map-config)]
+            [containium.systems.ring :refer (test-http-kit)]
+            [ring.middleware.session :refer (wrap-session)]
+            [ring.middleware.session.store :refer (SessionStore)]
+            [ring.middleware.session.memory :refer (memory-store)])
 
-- `:ttl`, a number holding the number of minutes a session should live (at least). The session TTL is reset with each request.
+;;; The ring app, without a session store yet, because that is added by the start function.
 
-
-### Module configuration
-
-Each module needs to specify a `:containium` entry in the `project.clj` file. That entry must have a map as its value, which can contain the following keys:
-
-- `:start`, this mandatory entry has a namespace qualified symbol as its value, pointing to the start function of the module. This function takes the value of the `:containium` entry of its own `project.clj` as its first argument, and a map with systems as its second argument. The function should return something that will be used as the argument to the stop function of the module (see next point).
-
-- `:stop`, this mandatory entry has a namespace qualified symbol as its value, pointing to the stop function of the module. This function takes the return value of the start function as its argument.
-
-- `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optially, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified.
-
-## Deploying using file system
-
-Deploying, redeploying, undeploying and swapping modules can be done on the command line, but programmatically it is easier done via the file system.
-
-### Current concept, not implemented yet:
-
-Containium watches a directory, as configured in `spec.clj`. One can add jar files in here for deployment, but it is adviced to put symlinks to those files in the directory. Using symlinks has the added benefit that one can deploy the same module multiple times, as it is the name of the symlink that is used in the Containium. Another benifit is that one can edit the jars (or `module.clj` files, see below), without invoking redeployments in the process. The files in the directory get renamed based on their status (e.g. deploying, deployed, etc). Depending on what you do with the files in the directory and the status, one can influence the deployed modules.
-
-- When adding file `X` to the directory, and no `X.deployed` exists, it is deployed. The file gets renamed to `X.deploying` and subsequently to `X.deployed`.
-
-- When touching a file `X.deployed` in the directory (i.e. its modification time changes), it is swapped or redeployed (depending on the `:swap-test` value in the `project.clj` file. The file gets successively renamed to `X.swapping` or `X.redeploying`, and `X.deployed` when done.
-
-- When removing a file `X.deployed`, it is undeployed. A file `X.undeploying` is created, and deleted when done.
-
-- When adding a file `X` while a `X.deployed` exists, a swap or redeploy is performed (depending on the `:swap-test` value in the `project.clj` file of the *new* module jar).
-
-The file/symlink may also point to a `module.clj` file, in which one can specify a config map that is merged into the `:containium` map of `project.clj`.
-
-When something goes wrong during a deploy, swap or redeploy, a file named `X.failed` is added. It contains some error information. The file is removed when a new action is initiated concerning `X`. It is possible that both an `X.deployed` and an `X.failed` file are coexisting in the directory, as this signals a swap going wrong.
+(defn app [request] (str "Hi, your session is: " (:session request)))
 
 
-## Command line
+;;; Each module has a start function, taking systems.
+
+(defn start [systems]
+  ;; First it is good to test whether a :session-store system is available.
+  (assert (:session-store systems) "Test module requires a :session-store system.")
+  ;; Use the protocol-forwarder to use systems from within a Boxure box.
+  (let [session-store ((protocol-forwarder SessionStore) (:session-store systems))]
+    (alter-var-root #'app #(wrap-session % {:store session-store}))))
+
+
+;;; Each module has a stop function, taking the result of the start function.
+
+(defn stop [_]) ; Nothing to stop that is module specific.
+
+
+;;; Have a main function for testing, simulating the Containium systems.
+
+(defn main [& args]
+  ;; Create the test systems.
+  (with-systems systems [:config (map-config {:http-kit {:port 8080}})
+                         :session-store (memory-store)
+                         :ring (test-http-kit #'app)]
+    ;; Start your application as Containium would.
+    (start systems)
+    ;; Do your tests here or wait for input.
+    (read-line))) ; Shutdown on enter.
+```
+
+Now one can run the example-module using the Containium systems, without actually being deployed. To run this module with `lein run`, one needs to add `:main example-module.core/main` to the `project.clj` file. To make this module deployable in Containium, one would need to add the following to `project.clj`:
+
+```clojure
+:containium {:start example-module.core/start
+            :stop example-module.core/stop
+            :ring {:handler example-module.core/app}}
+```
+
+
+## Using Containium as an application
+
+This section describes how the Application server is used when run as an application.
+
+### Running
+
+Currently, this is done by calling `lein run` within the root of `containium/`. After all the systems are started, one enters a command loop. See the section on this below for more information. Containium might also need some configuration changes, which is described in the next section.
+
+
+### Configuration
+
+Containium expects a `spec.clj` file to be available as a resource (i.e., on the classpath). This file contains EDN data, holding a map of configuration properties. This configuration is read by the `Config` system, and made available to the other systems (and modules) in that form. See the Codox documentation  for more information on which configuration maps are supported.
+
+
+### Deploying using file system
+
+Deploying and undeploying modules can be done on the command line, but programmatically it is easier done via the file system.
+
+Containium watches a directory, as configured in `spec.clj` under the `:fs` key. One can add jar files in here for deployment, but it is adviced to put symlinks to those files in the directory. Using symlinks has the added benefit that one can deploy the same module multiple times, as it is the name of the symlink that is used to identify the module in the Containium. Another benefit is that one can edit the jars, without invoking redeployments in the process.
+
+When adding a file `X` to the directory, a file called `X.status` is added which will hold the current state of the `X` module. Note that deployments through the command line also results in a file called `name-given-at-command-line.status`. The following actions are currently supported through the file system:
+
+- When adding file `X` to the directory, and no `X` module is deployed, it is deployed. The `X.status` file will hold `deploying` and subsequently `deployed` or `failed`.
+
+- When touching a file `X` in the directory (i.e. its modification time changes), it is swapped or redeployed (depending on the `:swap-test` value in the `project.clj` file. The status file will hold successively `swapping` or `redeploying`, and `deployed` or `failed` when done. **REDEPLOYING AND SWAPPING AND `:swap-test` HAS NOT BEEN IMPLEMENTED YET.**
+
+- When removing a file `X` and module `X` is deployed, it is undeployed. The status file will hold `undeploying` and subsequently `undeployed`.
+
+- When adding a file `X` while a module named `X` is already deployed (via another deployment method), a swap or redeploy is performed (depending on the `:swap-test` value in the `project.clj` file of the *new* module jar). **AGAIN, REDEPLOYING AND SWAPPING HAS NOT BEEN IMPLEMENTED YET.**
+
+
+#### Deploying `clj` files.
+
+Instead of a symlink, one can also put a `.clj` file in the deployments directory. This EDN formatted file must contain a map with two entries:
+
+- `:jar`, a String containing the (relative) path to the module jar.
+
+- `:containium`, a map that is merged onto the `:containium` map of `project.clj` of the module.
+
+Using this file, one can influence what is in the `:containium` configuration, e.g. when a jar contains multiple Ring handlers or one has specified ones own keys in the `:containium` map that one uses in the `:start` function of the module. (**NOTE THAT THIS LAST BIT IS ONLY USEFUL WHEN I CHANGE THE `start` FUNCTION SIGNATURE TO ALSO TAKE ITS OWN CONFIG MAP**).
+
+**DEPLOYING `.clj` FILES HAS NOT BEEN IMPLEMENTED YET.**
+
+
+### Command line
+
+When running Containium as an application, one enters a command loop after the root systems have started. It is here where one cae, among other things, manage deployments or start a REPL. Type `help` to get an overview of the available commands.
