@@ -155,6 +155,7 @@
   loop exited."
   [sys]
   (alter-var-root #'systems (constantly sys))
+  (deployer/bootstrap-modules (:fs sys))
   (command-loop sys))
 
 

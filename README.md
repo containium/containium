@@ -116,12 +116,13 @@ When adding a file `X` to the directory, a file called `X.status` is added which
 
 - When adding file `X` to the directory, and no `X` module is deployed, it is deployed. The `X.status` file will hold `deploying` and subsequently `deployed` or `failed`.
 
-- When touching a file `X` in the directory (i.e. its modification time changes), it is swapped or redeployed (depending on the `:swap-test` value in the `project.clj` file. The status file will hold successively `swapping` or `redeploying`, and `deployed` or `failed` when done. **REDEPLOYING AND SWAPPING AND `:swap-test` HAS NOT BEEN IMPLEMENTED YET.**
+- When touching a file `X` in the directory (i.e. its modification time changes), it is swapped or redeployed (depending on the `:swap-test` value in the `project.clj` file. The status file will hold successively `swapping` or `redeploying`, and `deployed` or `failed` when done. **SWAPPING AND `:swap-test` HAS NOT BEEN IMPLEMENTED YET.**
 
 - When removing a file `X` and module `X` is deployed, it is undeployed. The status file will hold `undeploying` and subsequently `undeployed`.
 
-- When adding a file `X` while a module named `X` is already deployed (via another deployment method), a swap or redeploy is performed (depending on the `:swap-test` value in the `project.clj` file of the *new* module jar). **AGAIN, REDEPLOYING AND SWAPPING HAS NOT BEEN IMPLEMENTED YET.**
+- When adding a file `X` while a module named `X` is already deployed (via another deployment method), a swap or redeploy is performed (depending on the `:swap-test` value in the `project.clj` file of the *new* module jar). **AGAIN, SWAPPING HAS NOT BEEN IMPLEMENTED YET.**
 
+When all the systems are started, the file system deployer is asked to trigger the deployment of all the files in the deployments directory (ignoring `.status` or hidden files).
 
 #### Deploying `clj` files.
 

@@ -23,18 +23,23 @@
 
 ;;; File system implementation.
 
+(def ignore-files-re #".*\.status|\..*")
+
+
 (defn- handle-notification
   [dir kind [module-name]]
   (spit (file dir (str module-name ".status")) (name kind)))
 
 
 (defn- handle-event
-  [manager dir kind ^Path path]
-  (let [file-name (.. path getFileName toString)
+  [manager dir kind file-or-path]
+  (let [file-name (if (instance? Path file-or-path)
+                    (.. file-or-path getFileName toString)
+                    (.getName file-or-path))
         timeout (* 1000 60)]
-    (when-not (re-matches #".*\.status" file-name)
+    (when-not (re-matches ignore-files-re file-name)
       (let [response (case kind
-                       :create (deref (deploy! manager file-name (file dir (.toFile path)))
+                       :create (deref (deploy! manager file-name (file dir file-name))
                                       timeout ::timeout)
                        :modify (deref (redeploy! manager file-name) timeout ::timeout)
                        :delete (deref (undeploy! manager file-name) timeout ::timeout))]
@@ -47,7 +52,13 @@
 (defrecord DirectoryDeployer [manager ^File dir watcher]
   Deployer
   (bootstrap-modules [_]
-    (assert false "Not implemented yet."))
+    (doseq [file (.listFiles dir)]
+      (when-not (or (.isDirectory file) (re-matches ignore-files-re (.getName file)))
+        (println "File system deployer now bootstrapping module" file)
+        (future (try
+                  (handle-event manager dir :create (.getAbsoluteFile file))
+                  (catch Exception ex
+                    (.printStackTrace ex)))))))
 
   Stoppable
   (stop [_]
