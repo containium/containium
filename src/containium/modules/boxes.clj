@@ -32,14 +32,14 @@
 
 (defn start-box
   "The logic for starting a box. Returns the started box."
-  [name jar boxure-config systems]
-  (println "Starting module" name "using jar" jar "...")
+  [name file boxure-config systems]
+  (println "Starting module" name "using file" file "...")
   (try
-    (let [project (boxure/jar-project jar)]
+    (let [project (boxure/file-project file)]
       (if-let [errors (seq (check-project project))]
         (apply println "Could not start module" name "for the following reasons:\n  "
                (interpose "\n  " errors))
-        (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) jar)
+        (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
               module-config (:containium project)
               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
                                               ~(:start module-config)))]

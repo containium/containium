@@ -124,6 +124,12 @@ When adding a file `X` to the directory, a file called `X.status` is added which
 
 When all the systems are started, the file system deployer is asked to trigger the deployment of all the files in the deployments directory (ignoring `.status` or hidden files).
 
+
+#### Deploying directories.
+
+It is common to deploy JAR files, but Containium (and Boxure) also support deploying directories. Such a directory needs to have a `project.clj` file. Boxure will use the `:source-paths`, `:resource-paths` and `:compile-path` entries within the project map as the classpath entries for that module.
+
+
 #### Deploying `clj` files.
 
 Instead of a symlink, one can also put a `.clj` file in the deployments directory. This EDN formatted file must contain a map with two entries:
