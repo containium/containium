@@ -130,17 +130,17 @@ When all the systems are started, the file system deployer is asked to trigger t
 It is common to deploy JAR files, but Containium (and Boxure) also support deploying directories. Such a directory needs to have a `project.clj` file. Boxure will use the `:source-paths`, `:resource-paths` and `:compile-path` entries within the project map as the classpath entries for that module.
 
 
-#### Deploying `clj` files.
+#### Deploying Clojure files.
 
-Instead of a symlink, one can also put a `.clj` file in the deployments directory. This EDN formatted file must contain a map with two entries:
+Again, it is common to deploy JAR files, but Containium also supports duploying Clojure files. This EDN formatted file must contain a map. The following entries are supported:
 
-- `:jar`, a String containing the (relative) path to the module jar.
+- `:file`, a mandatory entry, holding a String containing the (relative) path to the module jar or directory.
 
 - `:containium`, a map that is merged onto the `:containium` map of `project.clj` of the module.
 
-Using this file, one can influence what is in the `:containium` configuration, e.g. when a jar contains multiple Ring handlers or one has specified ones own keys in the `:containium` map that one uses in the `:start` function of the module. (**NOTE THAT THIS LAST BIT IS ONLY USEFUL WHEN I CHANGE THE `start` FUNCTION SIGNATURE TO ALSO TAKE ITS OWN CONFIG MAP**).
+- `:profiles`, a vector that contains the profile keywords one whishes to apply to the project map of the module.
 
-**DEPLOYING `.clj` FILES HAS NOT BEEN IMPLEMENTED YET.**
+Using this file, one can influence what is in the `:containium` configuration, e.g. when a jar contains multiple Ring handlers or one has specified ones own keys in the `:containium` map that one uses in the `:start` function of the module. (**NOTE THAT THIS LAST BIT IS ONLY USEFUL WHEN I CHANGE THE `start` FUNCTION SIGNATURE TO ALSO TAKE ITS OWN CONFIG MAP**).
 
 
 ### Command line

@@ -7,8 +7,10 @@
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
-            [containium.modules.boxes :refer (start-box stop-box)])
-  (:import [containium.systems Startable Stoppable]))
+            [containium.modules.boxes :refer (start-box stop-box)]
+            [clojure.edn :as edn])
+  (:import [containium.systems Startable Stoppable]
+           [java.io File]))
 
 
 ;;; Public system definitions.
@@ -73,23 +75,40 @@
   module)
 
 
+(defn- module-file
+  "Checks whether the file is a module file. This function returns a
+  triple. The first item is the (possibly updated) file. The second
+  item is the :containium map that needs to merged onto the project map
+  of the project map, but it may be nil. The third item is a vector of
+  profiles to apply when loading the module, which may be nil as well."
+  [^File file]
+  (if (.isDirectory file)
+    [file nil nil]
+    (if-let [module-map (try (edn/read-string (slurp file)) (catch Exception ex))]
+      [(File. file (:file module-map)) (:containium module-map) (:profiles module-map)]
+      [file nil nil])))
+
+
 (defn- do-deploy
   [manager {:keys [name] :as module} file promise]
-  (if-let [box (start-box name file
-                          (get-config (-> manager :systems :config) :modules)
-                          (:systems manager))]
-    (do (when (-> box :project :containium :ring)
+  (let [[file containium-merge profiles] (module-file file)
+        boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                          (assoc :profiles profiles))]
+    (if-let [box (start-box name file boxure-config (:systems manager))]
+      (let [box (assoc-in box [:project :containium]
+                          (merge (-> box :project :containium) containium-merge))]
+        (when (-> box :project :containium :ring)
           (upstart-box (-> manager :systems :ring) name box))
         (send-to-module manager name
                         #(do (deliver promise (Response. true (str "Module " name
                                                                    " successfully deployed.")))
                              (notify manager :deployed name file)
                              (assoc % :state :deployed :file file :box box))))
-    (send-to-module manager name
-                    #(do (deliver promise (Response. false (str "Error while deploying module "
-                                                                name ".")))
-                         (notify manager :failed name)
-                         (assoc % :state :undeployed)))))
+      (send-to-module manager name
+                      #(do (deliver promise (Response. false (str "Error while deploying module "
+                                                                  name ".")))
+                           (notify manager :failed name)
+                           (assoc % :state :undeployed))))))
 
 
 (defn- handle-deploy
