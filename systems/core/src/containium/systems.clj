@@ -3,7 +3,8 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems
-  "Logic for starting and stopping systems.")
+  "Logic for starting and stopping systems."
+  (:import [clojure.lang Compiler]))
 
 
 (defprotocol Startable
@@ -99,5 +100,5 @@
                  :let [{:keys [name arglists]} (val sig)]
                  arglist arglists]
              `(~name ~arglist (. ~impl
-                                 ~(symbol (.replaceAll (str name) "-" "_"))
+                                 ~(symbol (Compiler/munge (str name)))
                                  ~@(rest arglist))))))))
