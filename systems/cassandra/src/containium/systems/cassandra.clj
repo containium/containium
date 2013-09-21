@@ -27,7 +27,7 @@
   (prepare [this query]
     "Returns a CQLStatment that contains the prepared query String.")
 
-  (do-prepared [this prepared consistency args]
+  (^UntypedResultSet do-prepared [this prepared consistency args]
     "Executes a prepared CQLStatement. Consistency is one of :any, :one,
   :two, :three, :quorum, :all, :local-quorum or :each-quorum. The args
   argument is a sequence containing the position arguments for the
@@ -100,7 +100,7 @@
       QueryProcessor/getPrepared))
 
 
-(defrecord EmbeddedCassandra12 [daemon thread client-state query-state keyspace-q]
+(defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state keyspace-q]
   EmbeddedCassandra
   (prepare [_ query]
     (prepare* client-state query))

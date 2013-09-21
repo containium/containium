@@ -4,7 +4,8 @@
 
 (ns containium.systems.config
   "The system that handles the configuration."
-  (:require [clojure.edn :as edn]))
+  (:require [clojure.edn :as edn])
+  (:import [java.io File]))
 
 
 ;;; The system protocols.
@@ -20,7 +21,7 @@
 
 ;;; Implementation using a file.
 
-(defrecord FileConfig [file cache]
+(defrecord FileConfig [^File file cache]
   Config
   (get-config [_ key]
     (let [last-modified (.lastModified file)]

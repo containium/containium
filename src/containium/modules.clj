@@ -85,7 +85,7 @@
   (if (.isDirectory file)
     [file nil nil]
     (if-let [module-map (try (edn/read-string (slurp file)) (catch Exception ex))]
-      [(File. file (:file module-map)) (:containium module-map) (:profiles module-map)]
+      [(File. file (str (:file module-map))) (:containium module-map) (:profiles module-map)]
       [file nil nil])))
 
 

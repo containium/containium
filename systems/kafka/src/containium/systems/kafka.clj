@@ -34,7 +34,7 @@
 (defrecord EmbeddedKafka [^KafkaServer server ^Producer producer]
   Kafka
   (send-message [_ topic message]
-    (.send producer (ProducerData. topic message)))
+    (.send producer (ProducerData. ^String topic message)))
 
   Stoppable
   (stop [_]

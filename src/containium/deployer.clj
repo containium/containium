@@ -34,8 +34,8 @@
 (defn- handle-event
   [manager dir kind file-or-path]
   (let [file-name (if (instance? Path file-or-path)
-                    (.. file-or-path getFileName toString)
-                    (.getName file-or-path))
+                    (.. ^Path file-or-path getFileName toString)
+                    (.getName ^File file-or-path))
         timeout (* 1000 60)]
     (when-not (re-matches ignore-files-re file-name)
       (let [response (case kind
@@ -52,7 +52,7 @@
 (defrecord DirectoryDeployer [manager ^File dir watcher]
   Deployer
   (bootstrap-modules [_]
-    (doseq [file (.listFiles dir)]
+    (doseq [^File file (.listFiles dir)]
       (when-not (or (.isDirectory file) (re-matches ignore-files-re (.getName file)))
         (println "File system deployer now bootstrapping module" file)
         (future (try

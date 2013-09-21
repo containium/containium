@@ -144,7 +144,7 @@
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
                                    (interpose "\n  " threads))))))]
-    (.schedule timer task (* wait 1000))))
+    (.schedule timer task (int (* wait 1000)))))
 
 
 ;;; The coordinating functions.
