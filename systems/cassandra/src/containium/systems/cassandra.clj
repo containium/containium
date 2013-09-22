@@ -10,9 +10,9 @@
             [clojure.java.io :refer (copy)]
             [clojure.string :refer (replace split)])
   (:import [containium.systems Startable Stoppable]
-           [org.apache.cassandra.cql3 QueryOptions QueryProcessor UntypedResultSet]
+           [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
-           [org.apache.cassandra.service CassandraDaemon QueryState]
+           [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [containium ByteBufferInputStream]
            [java.io ByteArrayOutputStream]
@@ -106,18 +106,17 @@
     (prepare* client-state query))
 
   (do-prepared [_ prepared consistency args]
-    (let [options (QueryOptions.
-                    (case consistency
-                      :any            ConsistencyLevel/ANY
-                      :one            ConsistencyLevel/ONE
-                      :two            ConsistencyLevel/TWO
-                      :three          ConsistencyLevel/THREE
-                      :quorum         ConsistencyLevel/QUORUM
-                      :all            ConsistencyLevel/ALL
-                      :local-quorum   ConsistencyLevel/LOCAL_QUORUM
-                      :each-quorum    ConsistencyLevel/EACH_QUORUM)
-                    (map ->bytebuffer args))
-          result (QueryProcessor/processPrepared prepared query-state options)]
+    (let [consistency (case consistency
+                        :any ConsistencyLevel/ANY
+                        :one ConsistencyLevel/ONE
+                        :two ConsistencyLevel/TWO
+                        :three ConsistencyLevel/THREE
+                        :quorum ConsistencyLevel/QUORUM
+                        :all ConsistencyLevel/ALL
+                        :local-quorum ConsistencyLevel/LOCAL_QUORUM
+                        :each-quorum ConsistencyLevel/EACH_QUORUM)
+          result (QueryProcessor/processPrepared prepared consistency query-state
+                                                 (map ->bytebuffer args))]
       (when (instance? ResultMessage$Rows result)
         (UntypedResultSet. (.result ^ResultMessage$Rows result)))))
 
@@ -144,12 +143,11 @@
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :cassandra)]
         (println "Starting embedded Cassandra, using config" config "...")
-        ; [!] DO NOT IMPORT ClientState, or Cassandra's configuration will intiailize before the call to System/setProperty
         (System/setProperty "cassandra.config" (:config-file config))
         (System/setProperty "cassandra-foreground" "false")
         (let [daemon (CassandraDaemon.)
               thread (Thread. #(.activate daemon))
-              client-state (org.apache.cassandra.service.ClientState. true)
+              client-state (ClientState. true)
               keyspace-q (prepare* client-state
                                    "SELECT * FROM system.schema_keyspaces WHERE keyspace_name = ?;")
               query-state (QueryState. client-state)]
