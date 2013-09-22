@@ -76,8 +76,8 @@
         (println "Starting filesystem deployment watcher, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
         (let [dir (file (:deployments config))]
-          (assert (.exists dir) ("The directory " dir " does not exist."))
-          (assert (.isDirectory dir) (str "Path " dir " is not a directory."))
+          (assert (.exists dir) (str "The directory '" dir "' does not exist."))
+          (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
           (register-notifier! manager "fs-deployer" (partial handle-notification dir))
           (let [watcher (-> (mk-watchservice (partial handle-event manager dir))
                             (watch dir))]
