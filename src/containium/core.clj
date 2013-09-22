@@ -18,7 +18,8 @@
             [clojure.tools.nrepl.server :as nrepl]
             [clojure.pprint :refer (pprint print-table)])
   (:import [jline.console ConsoleReader]
-           [java.util Timer TimerTask]))
+           [java.util Timer TimerTask])
+  (:gen-class))
 
 
 ;;; Globals for REPL access. A necessary evil.
