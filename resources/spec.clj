@@ -5,7 +5,7 @@
 ;;;; Production settings.
 
 {:http-kit {:port 8080}
- :cassandra {:config-file "cassandra.yaml"}
+ :cassandra {:listen-address "localhost"}
  :session-store {:ttl 60}
  :kafka {:server {:port 9090
                   :brokerid 1

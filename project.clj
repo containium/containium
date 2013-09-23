@@ -14,15 +14,27 @@
                  [ring/ring-core "1.2.0"]
                  [http-kit "2.1.10"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
-                 [org.apache.cassandra/cassandra-all "2.0.0"]
+                 [org.apache.cassandra/cassandra-all "2.0.0" :exclusions [com.thinkaurelius.thrift/thrift-server
+                                                                          org.yaml/snakeyaml]]
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [kafka/core-kafka_2.9.2 "0.7.2"]
                  [com.taoensso/nippy "2.1.0"]
                  [org.clojure/core.cache "0.6.3"]]
+;➭ ll target/containium-0.1.0-SNAPSHOT-standalone.jar
+;  With yaml:    -rw-r--r--  1 blue  staff  51399386 22 sep 02:28 target/containium-0.1.0-SNAPSHOT-standalone.jar
+;                                           49,018274307 MB
+;  Without yaml: -rw-r--r--  1 blue  staff  51128514 22 sep 02:26 target/containium-0.1.0-SNAPSHOT-standalone.jar
+;                                           48,759950638 MB
   :exclusions [org.clojure/clojure]
   :java-source-paths ["src-java"]
+  :aot 'containium.systems.cassandra.config
   :main containium.core
+  :profiles {:release {:aot :all}
+             :uberjar {:omit-sources true
+                       :exclusions [;org.apache.cassandra.config.DatabaseDescriptor.loadConfig() needs: org.apache.thrift/libthrift
+                                    org.apache.cassandra/cassandra-thrift]
+                       :uberjar-exclusions [#"^[^/]+?(ya?ml|spec.clj)$"]}}
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
@@ -43,6 +55,23 @@
                     containium.systems.kafka
                     containium.modules
                     containium.systems.repl
-                    containium.systems.ring]})
+                    containium.systems.ring]}
+
+  :pom-addition [:build [:plugins
+                            [:plugin
+                              [:groupId "com.theoryinpractise"]
+                              [:artifactId "clojure-maven-plugin"]
+                              [:version "1.3.15"]
+                              [:extensions "true"]
+                              [:configuration
+                                [:sourceDirectories
+                                  [:sourceDirectory "src"]]
+                                [:temporaryOutputDirectory "true"]]
+                              [:executions
+                                [:execution
+                                  [:id "compile-clojure"]
+                                  [:phase "compile"]
+                                  [:goals
+                                    [:goal "compile"]]]]]]])
 
 ;;; Sync this file with pom.xml.
