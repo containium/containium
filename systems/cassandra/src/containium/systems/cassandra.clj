@@ -10,7 +10,7 @@
             [clojure.java.io :refer (copy)]
             [clojure.string :refer (replace split)])
   (:import [containium.systems Startable Stoppable]
-           [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
+           [org.apache.cassandra.cql3 QueryOptions QueryProcessor UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
            [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
@@ -106,17 +106,18 @@
     (prepare* client-state query))
 
   (do-prepared [_ prepared consistency args]
-    (let [consistency (case consistency
-                        :any ConsistencyLevel/ANY
-                        :one ConsistencyLevel/ONE
-                        :two ConsistencyLevel/TWO
-                        :three ConsistencyLevel/THREE
-                        :quorum ConsistencyLevel/QUORUM
-                        :all ConsistencyLevel/ALL
-                        :local-quorum ConsistencyLevel/LOCAL_QUORUM
-                        :each-quorum ConsistencyLevel/EACH_QUORUM)
-          result (QueryProcessor/processPrepared prepared consistency query-state
-                                                 (map ->bytebuffer args))]
+    (let [options (QueryOptions.
+                    (case consistency
+                      :any            ConsistencyLevel/ANY
+                      :one            ConsistencyLevel/ONE
+                      :two            ConsistencyLevel/TWO
+                      :three          ConsistencyLevel/THREE
+                      :quorum         ConsistencyLevel/QUORUM
+                      :all            ConsistencyLevel/ALL
+                      :local-quorum   ConsistencyLevel/LOCAL_QUORUM
+                      :each-quorum    ConsistencyLevel/EACH_QUORUM)
+                    (map ->bytebuffer args))
+          result (QueryProcessor/processPrepared prepared query-state options)]
       (when (instance? ResultMessage$Rows result)
         (UntypedResultSet. (.result ^ResultMessage$Rows result)))))
 
