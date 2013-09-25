@@ -147,6 +147,13 @@
                                    (interpose "\n  " threads))))))]
     (.schedule timer task (int (* wait 1000)))))
 
+;;; Daemon control
+
+(def daemon-latch (java.util.concurrent.CountDownLatch. 1))
+(defn shutdown []
+  (println "Received kill.")
+  (.countDown daemon-latch)
+  (Thread/sleep 1337))
 
 ;;; The coordinating functions.
 
@@ -160,9 +167,22 @@
   (deployer/bootstrap-modules (:fs sys))
   (command-loop sys))
 
+(defn run-daemon
+  "Same as 'run but without the command-loop"
+  [sys]
+  (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. shutdown))
+  (println "Waiting for the kill.")
+  (alter-var-root #'systems (constantly sys))
+  (deployer/bootstrap-modules (:fs sys))
+  (.await daemon-latch))
+
 
 (defn -main
-  [& args]
+  "Launches containium process.
+
+  When run with no arguments: interactive console is started.
+  Any other argument will activate daemon mode."
+  [& [daemon? args]]
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                          :cassandra cassandra/embedded12
                          :elastic elastic/embedded
@@ -172,6 +192,7 @@
                          :modules modules/default-manager
                          :fs deployer/directory
                          :repl repl/nrepl]
-    (run systems))
+    ((if daemon? run-daemon #_else run) systems))
+  (println "Shutting down...")
   (shutdown-agents)
   (shutdown-timer 10))
