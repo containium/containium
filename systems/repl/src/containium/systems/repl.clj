@@ -4,7 +4,8 @@
 
 (ns containium.systems.repl
   "The system for starting and stopping REPLs."
-  (:require [containium.systems :refer (Stoppable)]
+  (:require [containium.systems :refer (require-system Startable Stoppable)]
+            [containium.systems.config :refer (Config get-config)]
             [clojure.tools.nrepl.server :as nrepl]))
 
 
@@ -41,6 +42,13 @@
           (reset! server nil)
           (println "nREPL server stopped."))
       (println "Could not close nREPL, no nREPL server currently running.")))
+
+  Startable
+  (start [this systems]
+    (let [{:keys [port]} (get-config (require-system Config systems) :repl)]
+      (assert (integer? port))
+      (open-repl this port)
+      this))
 
   Stoppable
   (stop [this]
