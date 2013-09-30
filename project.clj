@@ -15,6 +15,7 @@
                  [http-kit "2.1.10"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
                  [org.apache.cassandra/cassandra-all "1.2.10"]
+                 [org.xerial.snappy/snappy-java      "1.1.0-M3"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [kafka/core-kafka_2.9.2 "0.7.2"]
