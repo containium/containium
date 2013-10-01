@@ -24,7 +24,12 @@
 
 ;;; Globals for REPL access. A necessary evil.
 
-(def systems nil)
+(defonce systems nil)
+
+(defmacro eval-in
+  "Evaluate the given `forms` (in an implicit do) in the module identified by `name`."
+  [name & forms]
+  `@(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name)) '(do ~@forms)))
 
 
 ;;; Command loop.
@@ -149,7 +154,7 @@
 
 ;;; Daemon control
 
-(def daemon-latch (java.util.concurrent.CountDownLatch. 1))
+(def ^java.util.concurrent.CountDownLatch daemon-latch (java.util.concurrent.CountDownLatch. 1))
 (defn shutdown []
   (println "Received kill.")
   (.countDown daemon-latch)
@@ -170,7 +175,7 @@
 (defn run-daemon
   "Same as 'run but without the command-loop"
   [sys]
-  (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. shutdown))
+  (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. ^Runnable shutdown))
   (println "Waiting for the kill.")
   (alter-var-root #'systems (constantly sys))
   (deployer/bootstrap-modules (:fs sys))

@@ -20,4 +20,5 @@
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
                       "ring.*"]}
+ :repl {:port 13337}
  :fs {:deployments "dev-resources/deployments"}}
