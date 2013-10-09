@@ -104,6 +104,7 @@
                                                                    " successfully deployed.")))
                              (notify manager :deployed name file)
                              (assoc % :state :deployed :file file :box box))))
+      ; Else:
       (send-to-module manager name
                       #(do (deliver promise (Response. false (str "Error while deploying module "
                                                                   name ".")))
@@ -121,7 +122,7 @@
     :undeploying (invalid-state module promise "currently undeploying.")
     :undeployed (do (future (do-deploy manager module file promise))
                     (notify manager :deploying name)
-                    (assoc module :state :deploying))))
+                    (assoc module :state :deploying, :file file))))
 
 
 (defn- do-undeploy
@@ -178,7 +179,7 @@
     :redeploying (invalid-state module promise "already redeploying")
     :swapping (invalid-state module promise "already swapping")
     :undeploying (invalid-state module promise "currently undeploying")
-    :undeployed (invalid-state module promise "undeployed, so cannot be redeployed")
+    :undeployed (handle-deploy module manager (:file module) promise)
     :deployed (do (future (do-redeploy manager module promise))
                   (notify manager :redeploying name)
                   ;; (assoc module :state :redeploying)

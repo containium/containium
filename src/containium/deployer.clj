@@ -53,7 +53,7 @@
   Deployer
   (bootstrap-modules [_]
     (doseq [^File file (.listFiles dir)]
-      (when-not (or (.isDirectory file) (re-matches ignore-files-re (.getName file)))
+      (when-not (re-matches ignore-files-re (.getName file))
         (println "File system deployer now bootstrapping module" file)
         (future (try
                   (handle-event manager dir :create (.getAbsoluteFile file))
