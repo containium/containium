@@ -35,6 +35,7 @@
   Kafka
   (send-message [_ topic message]
     ; TODO: Implement forwarding Encoder for send-message
+    ;        or librarylize prime.utils.msgpack.KafkaVOSerializer
     ; Producer runs as root system, so it can't find and instantiate the serializer class loaded in the app...
     (.send producer (ProducerData. ^String topic message)))
 

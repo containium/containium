@@ -32,6 +32,7 @@
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
+  :repl-options {:port 13337}
   :global-vars {*warn-on-reflection* true}
   :plugins [[codox "0.6.6"]]
   :codox {:output-dir "codox"

@@ -128,7 +128,7 @@
     (loop []
       (let [[command & args] (map (fn [[normal quoted]] (or quoted normal)) (re-seq #"'([^']+)'|[^\s]+" (trim (.readLine jline "containium> "))))]
         (case command
-          "" (recur)
+          nil (recur)
           "shutdown" nil
           (do (try
                 (handle-command command args systems)
