@@ -75,39 +75,53 @@
   module)
 
 
-(defn- module-file
-  "Checks whether the file is a module file. This function returns a
-  triple. The first item is the (possibly updated) file. The second
-  item is the :containium map that needs to merged onto the project map
-  of the project map, but it may be nil. The third item is a vector of
-  profiles to apply when loading the module, which may be nil as well."
+(defn module-descriptor
+  "This function returns a module descriptor map, which at minimum contains:
+
+  {:file (File. \"/path/to/module\"), :profiles [:default]}
+
+  When `file` is a module file, it's contents is merged into the descriptor map.
+  In a later stage (start-box) the :name, :project and :profiles keys can be conj'd."
   [^File file]
-  (if (.isDirectory file)
-    [file nil nil]
-    (if-let [module-map (try (edn/read-string (slurp file)) (catch Exception ex))]
-      [(File. file (str (:file module-map))) (:containium module-map) (:profiles module-map)]
-      [file nil nil])))
+  (assert file "Path to module, or module descriptor File required!")
+  (let [descriptor {:file file, :profiles [:default]}]
+    (if (.isDirectory file)
+      descriptor
+    ; else if not a Directory:
+      (if-let [module-map (try (edn/read-string (slurp file))
+                            (catch Exception ex (do (println "Failed reading module descriptor: " file) (.printStackTrace ex))))]
+        (let [file-str (str (:file module-map))
+              file (if-not (. (:file module-map) startsWith "/")
+                           (File. file file-str)
+                    #_else (File. file-str))]
+          (assert (.exists file) (str file " does not exist."))
+          (merge descriptor module-map {:file file}) (:profiles module-map))
+      ; else if not a module descriptor file:
+        descriptor))))
 
 
 (defn- do-deploy
   [manager {:keys [name] :as module} file promise]
-  (let [[file containium-merge profiles] (module-file file)
-        boxure-config (-> (get-config (-> manager :systems :config) :modules)
-                          (assoc :profiles profiles))]
-    (if-let [box (start-box name file boxure-config (:systems manager))]
-      (let [box (assoc-in box [:project :containium]
-                          (merge (-> box :project :containium) containium-merge))]
-        (when (-> box :project :containium :ring)
-          (upstart-box (-> manager :systems :ring) name box))
-        (send-to-module manager name
-                        #(do (deliver promise (Response. true (str "Module " name
-                                                                   " successfully deployed.")))
-                             (notify manager :deployed name file)
-                             (assoc % :state :deployed :file file :box box))))
-      ; Else:
+  (try
+    (let [{:keys [file containium profiles] :as descriptor} (assoc (module-descriptor file) :name name)
+          boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                            (assoc :profiles profiles))]
+      (if-let [box (start-box descriptor boxure-config (:systems manager))]
+        (let [box (assoc-in box [:project :containium]
+                            (merge (-> box :project :containium) containium))]
+          (when (-> box :project :containium :ring)
+            (upstart-box (-> manager :systems :ring) name box))
+          (send-to-module manager name
+                          #(do (deliver promise (Response. true (str "Module " name
+                                                                     " successfully deployed.")))
+                               (notify manager :deployed name file)
+                               (assoc % :state :deployed :file file :box box))))
+      ; else if box failed to start:
+        (throw (Exception. ""))))
+    (catch Exception ex
       (send-to-module manager name
                       #(do (deliver promise (Response. false (str "Error while deploying module "
-                                                                  name ".")))
+                                                                  name ".\n" (.getMessage ex))))
                            (notify manager :failed name)
                            (assoc % :state :undeployed))))))
 

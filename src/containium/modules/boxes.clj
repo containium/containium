@@ -32,22 +32,23 @@
 
 (defn start-box
   "The logic for starting a box. Returns the started box."
-  [name file boxure-config systems]
+  [{:keys [name file] :as descriptor} boxure-config systems]
   (println "Starting module" name "using file" file "...")
   (try
-    (let [project (boxure/file-project file)]
+    (let [project (boxure/file-project file (:lein-profiles descriptor))]
       (if-let [errors (seq (check-project project))]
         (apply println "Could not start module" name "for the following reasons:\n  "
                (interpose "\n  " errors))
         (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
               module-config (:containium project)
+              deploy-config (merge descriptor {:containium module-config, :project project})
               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
                                               ~(:start module-config)))]
           (if (instance? Throwable start-fn)
             (do (boxure/clean-and-stop box)
                 (throw start-fn))
             (try
-              (let [start-result (boxure/call-in-box box start-fn systems)]
+              (let [start-result (boxure/call-in-box box start-fn systems deploy-config)]
                 (println "Module" name "started.")
                 (assoc box :start-result start-result))
               (catch Throwable ex
