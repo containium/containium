@@ -112,6 +112,7 @@
 (defn- box->ring-app
   [name {:keys [project] :as box}]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
+        _ (assert (and ring-conf (:handler ring-conf)) (print-str ":ring system config requires a :handler, but ring-conf only contains: " ring-conf))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))]
     (RingApp. name box handler-fn ring-conf)))
