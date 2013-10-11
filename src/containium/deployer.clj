@@ -57,7 +57,8 @@
         (println "File system deployer now bootstrapping module" file)
         (future (try
                   (handle-event manager dir :create (.getAbsoluteFile file))
-                  (catch Exception ex
+                  (catch Throwable ex
+                    (println "handle-event :create failed")
                     (.printStackTrace ex)))))))
 
   Stoppable

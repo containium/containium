@@ -118,7 +118,9 @@
                                (assoc % :state :deployed :file file :box box))))
       ; else if box failed to start:
         (throw (Exception. ""))))
-    (catch Exception ex
+    (catch Throwable ex
+      (println ex)
+      (.printStackTrace ex)
       (send-to-module manager name
                       #(do (deliver promise (Response. false (str "Error while deploying module "
                                                                   name ".\n" (.getMessage ex))))

@@ -86,7 +86,7 @@
                          :continue)
                        (catch ClosedWatchServiceException cwse
                          (println "Stopping filesystem watcher."))
-                       (catch Exception e
+                       (catch Throwable e
                          (println "Exception while polling for file system events:" e)
                          (println "Stopping watching. Maybe improve this.")))
                    (recur)
