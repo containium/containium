@@ -104,8 +104,11 @@
           boxure-config (-> (get-config (-> manager :systems :config) :modules)
                             (assoc :profiles profiles))]
       (if-let [box (start-box descriptor boxure-config (:systems manager))]
-        (let [box (assoc-in box [:project :containium]
-                            (merge (-> box :project :containium) containium))]
+        ; --------
+        ; ARNOUT-PLEASE-FIXME: Should the project map get updated with values from the Module deployment descriptor?
+        ; It's not really data coming from a leiningen project, but on the other hand you probably don't want different :containium data?
+        ; --------
+        (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))]
           (when (-> box :project :containium :ring)
             (upstart-box (-> manager :systems :ring) name box))
           (send-to-module manager name
