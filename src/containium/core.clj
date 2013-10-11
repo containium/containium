@@ -51,7 +51,7 @@
   (println (str "Available commands are:"
                 "\n"
                 "\n module <list|deploy|undeploy|redeploy> [name [path]]"
-                "\n   Prints a list of running modules, deploys a module by name and path, or"
+                "\n   Prints a list of installed modules, deploys a module by name and path, or"
                 "\n   undeploys/redeploys a module by name. Paths can point to a directory or"
                 "\n   to a JAR file."
                 "\n"
@@ -91,7 +91,7 @@
   (let [[action name path] args
         timeout (* 1000 60)]
     (case action
-      "list" (print-table (modules/list-active (:modules systems)))
+      "list" (print-table (modules/list-installed (:modules systems)))
       "deploy" (if (and name path)
                  (future (println (:message (deref (modules/deploy! (:modules systems) name
                                                                     (as-file path))

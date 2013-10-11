@@ -16,9 +16,9 @@
 ;;; Public system definitions.
 
 (defprotocol Manager
-  (list-active [this]
+  (list-installed [this]
     "Returns a sequence of maps with :name and :state entries for the
-  currently active modules.")
+  currently installed modules.")
 
   (deploy! [this name file]
     "Try to deploy the file under the specified name. A promise is
@@ -209,11 +209,10 @@
 
 (defrecord DefaultManager [config systems agents notifiers]
   Manager
-  (list-active [_]
+  (list-installed [_]
     (keep (fn [[name agent]]
-            (let [state (:state @agent)]
-              (when (not= :undeployed state)
-                {:name name :state state})))
+            (if-let [state (:state @agent)]
+              {:name name :state state}))
           @agents))
 
   (deploy! [this name file]
