@@ -25,11 +25,30 @@ Modules are the components that are isolated from each other, and can be undeplo
 
 For a module to be deployable in Containium, it needs to have a `:containium` configuration map in the `project.clj` file. This map may contain the following entries:
 
-- `:start`, this mandatory entry has a namespace qualified symbol as its value, pointing to the start function of the module. This function takes a map with systems as its sole argument (**THIS MAY CHANGE IN THE NEAR FUTURE. I'M THINKING OF ADDING THE `:containium` CONFIG OF ITSELF AS AN ARGUMENT AS WELL, AS DEPLOYING `.clj` FILES (see further down) MAY INFLUENCE THIS CONFIG**). The function should return something that will be used as the argument to the stop function of the module (see next point).
+- `:start`, this mandatory entry has a namespace qualified symbol as its value, pointing to the start function of the module. This function takes a map with systems as its first argument, and a module configuration map. The function should return something that will be used as the argument to the stop function of the module (see next point).
 
 - `:stop`, this mandatory entry has a namespace qualified symbol as its value, pointing to the stop function of the module. This function takes the return value of the start function as its argument. (**MAYBE I MAKE THIS ENTRY OPTIONAL, AS NOT EVERY MODULE NEEDS IT. ON THE OTHER HAND, HAVING IT MANDATORY MAKES ONE THINK EXPLICITLY ABOUT CLEANING UP RESOURCES.**)
 
 - `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optionally, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified. Also note that when a module with a Ring app is deployed, the handler is automatically registered in the root Ring server, i.e. one does not have to do this oneself.
+
+
+### Module configuration map
+
+Each module is started with a configuration map as its second argument. This map is built from Leiningen profiles, as well as deployment descriptors (see below).
+
+Containium guarantees this map contains the following entries:
+
+- `:file`, holding a java.io.File containing the path to the module jar or directory.
+
+- `:profiles`, a vector that contains the profile keywords that were requested to apply to the project map of the module.
+
+- `:active-profiles` is *non-overridable* and populated by Containium itself. It contains a set of all active lein profiles.
+
+- `:dev?`, boolean true or false to indicate if the module should run in (local) development mode.
+
+- `:containium`, the final "module specific systems configuration" used by Containium, after merging all active profiles and the [module deployment descriptor](#deploying-clojure-files-deployment-descriptors).
+
+- Any other arbitrary :key value pair that was set in the module deployment descriptor.
 
 
 ## Using Containium as a library
@@ -56,7 +75,7 @@ For an example module, one could have the following `example_module/core.clj` fi
 
 ;;; Each module has a start function, taking systems.
 
-(defn start [systems]
+(defn start [systems conf]
   ;; First it is good to test whether a :session-store system is available.
   (assert (:session-store systems) "Test module requires a :session-store system.")
   ;; Use the protocol-forwarder to use systems (which in turn use clojure protocols)
@@ -78,7 +97,7 @@ For an example module, one could have the following `example_module/core.clj` fi
                          :session-store (memory-store)
                          :ring (test-http-kit #'app)]
     ;; Start your application as Containium would.
-    (start systems)
+    (start systems {})
     ;; Do your tests here or wait for input.
     (read-line))) ; Shutdown on enter.
 ```
@@ -130,17 +149,21 @@ When all the systems are started, the file system deployer is asked to trigger t
 It is common to deploy JAR files, but Containium (and Boxure) also support deploying directories. Such a directory needs to have a `project.clj` file. Boxure will use the `:source-paths`, `:resource-paths` and `:compile-path` entries within the project map as the classpath entries for that module.
 
 
-#### Deploying Clojure files.
+#### Deploying Clojure files (deployment descriptors).
 
-Again, it is common to deploy JAR files, but Containium also supports duploying Clojure files. This EDN formatted file must contain a map. The following entries are supported:
+Again, it is common to deploy JAR files, but Containium also supports deploying Clojure files. This EDN formatted file must contain a map. The following entries are supported:
 
-- `:file`, a mandatory entry, holding a String containing the (relative) path to the module jar or directory.
+- `:file`, a mandatory entry, holding a String containing the path to the module jar or directory. When the String starts with a forward slash `/`, it is treated as an absolute path, otherwise it is relative to the java (containium) process' working directory (the `user.dir` system property).
 
-- `:containium`, a map that is merged onto the `:containium` map of `project.clj` of the module.
+- `:containium`, a map that is [meta-merged like Leiningen profiles](https://github.com/technomancy/leiningen/blob/master/doc/PROFILES.md#merging) onto the `:containium` map from the `project.clj` of the module.
 
 - `:profiles`, a vector that contains the profile keywords one whishes to apply to the project map of the module.
 
-Using this file, one can influence what is in the `:containium` configuration, e.g. when a jar contains multiple Ring handlers or one has specified ones own keys in the `:containium` map that one uses in the `:start` function of the module. (**NOTE THAT THIS LAST BIT IS ONLY USEFUL WHEN I CHANGE THE `start` FUNCTION SIGNATURE TO ALSO TAKE ITS OWN CONFIG MAP**).
+- `:dev?`, defaults to `true` when the :dev lein profile is active.
+
+- Any arbitrary `:key value` pair (*except* `:active-profiles`) is left as is and merged onto the [Module configuration map](#module-configuration-map).
+
+Using this file, one can influence what is in the `:containium` configuration, e.g. when a jar contains multiple Ring handlers or one has specified ones own keys in the `:containium` map that one uses in the `:start` function of the module.
 
 
 ### Command line

@@ -4,8 +4,10 @@
 
 (ns containium.modules.boxes
   "Logic for starting and stopping boxes."
-  (:require [boxure.core :refer (boxure) :as boxure]))
+  (:require [boxure.core :refer (boxure) :as boxure]
+            [leiningen.core.project]))
 
+(def meta-merge #'leiningen.core.project/meta-merge)
 
 (defn- check-project
   [project]
@@ -35,22 +37,25 @@
   [{:keys [name file] :as descriptor} boxure-config systems]
   (println "Starting module" name "using file" file "...")
   (try
-    (let [project (boxure/file-project file (:lein-profiles descriptor))]
+    (let [project (boxure/file-project file (:profiles descriptor))]
       (if-let [errors (seq (check-project project))]
         (apply println "Could not start module" name "for the following reasons:\n  "
                (interpose "\n  " errors))
         (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
-              module-config (:containium project)
-              deploy-config (merge descriptor {:containium module-config, :project project})
+              module-config (meta-merge (:containium project) (:containium descriptor))
+              active-profiles (-> (meta project) :active-profiles set)
+              descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
+                                descriptor ; descriptor overrides implicits
+                                {:project project, :active-profiles active-profiles, :containium module-config})
               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
                                               ~(:start module-config)))]
           (if (instance? Throwable start-fn)
             (do (boxure/clean-and-stop box)
                 (throw start-fn))
             (try
-              (let [start-result (boxure/call-in-box box start-fn systems deploy-config)]
+              (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
                 (println "Module" name "started.")
-                (assoc box :start-result start-result))
+                (assoc box :start-result start-result, :descriptor descriptor))
               (catch Throwable ex
                 (boxure/clean-and-stop box)
                 (throw ex)))))))

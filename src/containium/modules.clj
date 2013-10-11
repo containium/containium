@@ -81,29 +81,26 @@
   {:file (File. \"/path/to/module\"), :profiles [:default]}
 
   When `file` is a module file, it's contents is merged into the descriptor map.
-  In a later stage (start-box) the :name, :project and :profiles keys can be conj'd."
+  In a later stage (i.e. start-box) the :name, :project and :profiles keys can be conj'd."
   [^File file]
   (assert file "Path to module, or module descriptor File required!")
-  (let [descriptor {:file file, :profiles [:default]}]
+  (let [descriptor-defaults {:file file, :profiles [:default]}]
     (if (.isDirectory file)
-      descriptor
+      descriptor-defaults
     ; else if not a Directory:
       (if-let [module-map (try (edn/read-string (slurp file))
-                            (catch Exception ex (do (println "Failed reading module descriptor: " file) (.printStackTrace ex))))]
-        (let [file-str (str (:file module-map))
-              file (if-not (. (:file module-map) startsWith "/")
-                           (File. file file-str)
-                    #_else (File. file-str))]
-          (assert (.exists file) (str file " does not exist."))
-          (merge descriptor module-map {:file file}) (:profiles module-map))
+                            (catch Throwable ex (throw (Exception. (str "Failed reading module descriptor: " file) ex))))]
+        (let [file (File. (System/getProperty "user.dir") (str (:file module-map)))]
+          (when-not (. file exists) (throw (IllegalArgumentException. (str file " does not exist."))))
+          (merge descriptor-defaults module-map {:file file}))
       ; else if not a module descriptor file:
-        descriptor))))
+        descriptor-defaults))))
 
 
 (defn- do-deploy
   [manager {:keys [name] :as module} file promise]
   (try
-    (let [{:keys [file containium profiles] :as descriptor} (assoc (module-descriptor file) :name name)
+    (let [{:keys [containium profiles] :as descriptor} (assoc (module-descriptor file) :name name)
           boxure-config (-> (get-config (-> manager :systems :config) :modules)
                             (assoc :profiles profiles))]
       (if-let [box (start-box descriptor boxure-config (:systems manager))]
@@ -115,9 +112,12 @@
                           #(do (deliver promise (Response. true (str "Module " name
                                                                      " successfully deployed.")))
                                (notify manager :deployed name file)
+                               ; Make sure :file refers to the original file argument,
+                               ;  and not the descriptor :file,
+                               ;  to allow redeploying module descriptor files
                                (assoc % :state :deployed :file file :box box))))
       ; else if box failed to start:
-        (throw (Exception. ""))))
+        (throw (Exception. (str "Box " name " failed to start.")))))
     (catch Throwable ex
       (println ex)
       (.printStackTrace ex)
