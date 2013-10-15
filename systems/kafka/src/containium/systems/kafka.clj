@@ -20,6 +20,7 @@
 
 ;;; The embedded implementation.
 
+;FIXME: remove this copy of map->properties when prime-vo-kafka is a separate small library.
 (defn- map->properties
   ([map]
      (map->properties map (Properties.)))

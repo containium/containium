@@ -82,7 +82,8 @@
     primitive))
 
 
-(defn- cql-statements
+;FIXME: Move this and the duplicate copy in `prime.types.cassandra-repository` into helper library.
+(defn cql-statements
   "Returns the CQL statements from the specified String in a sequence."
   [s]
   (let [no-comments (-> s
