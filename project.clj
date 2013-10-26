@@ -3,8 +3,8 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (defproject containium "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+  :description "A horizontally-isolating application server for Clojure"
+  :url "http://github.com/containium/containium"
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
   :dependencies [[boxure/clojure "1.5.1"]
@@ -49,3 +49,4 @@
                     containium.systems.ring]})
 
 ;;; Sync this file with pom.xml.
+;;; ---TODO: Use the :pom-plugins key when Leiningen 2.3.4 is released.

@@ -87,7 +87,7 @@
   (let [descriptor-defaults {:file file, :profiles [:default]}]
     (if (.isDirectory file)
       descriptor-defaults
-    ; else if not a Directory:
+      ;; else if not a directory.
       (if-let [module-map (try (edn/read-string (slurp file))
                             (catch Throwable ex (throw (Exception. (str "Failed reading module descriptor: " file) ex))))]
         (let [file-str (str (:file module-map))
@@ -96,7 +96,7 @@
                     #_else (File. file-str))]
           (when-not (. file exists) (throw (IllegalArgumentException. (str file " does not exist."))))
           (merge descriptor-defaults module-map {:file file}))
-      ; else if not a module descriptor file:
+        ;; else if not a module descriptor file.
         descriptor-defaults))))
 
 
@@ -107,10 +107,6 @@
           boxure-config (-> (get-config (-> manager :systems :config) :modules)
                             (assoc :profiles profiles))]
       (if-let [box (start-box descriptor boxure-config (:systems manager))]
-        ; --------
-        ; ARNOUT-PLEASE-FIXME: Should the project map get updated with values from the Module deployment descriptor?
-        ; It's not really data coming from a leiningen project, but on the other hand you probably don't want different :containium data?
-        ; --------
         (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))]
           (when (-> box :project :containium :ring)
             (upstart-box (-> manager :systems :ring) name box))
@@ -118,11 +114,10 @@
                           #(do (deliver promise (Response. true (str "Module " name
                                                                      " successfully deployed.")))
                                (notify manager :deployed name file)
-                               ; Make sure :file refers to the original file argument,
-                               ;  and not the descriptor :file,
-                               ;  to allow redeploying module descriptor files
+                               ;; Make sure :file refers to the original file argument, and not the
+                               ;; descriptor :file, to allow redeploying module descriptor files.
                                (assoc % :state :deployed :file file :box box))))
-      ; else if box failed to start:
+        ;; else if box failed to start.
         (throw (Exception. (str "Box " name " failed to start.")))))
     (catch Throwable ex
       (println ex)
