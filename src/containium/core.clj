@@ -50,10 +50,11 @@
   [_ _ _]
   (println (str "Available commands are:"
                 "\n"
-                "\n module <list|deploy|undeploy|redeploy> [name [path]]"
+                "\n module <list|deploy|undeploy|redeploy|kill> [name [path]]"
                 "\n   Prints a list of installed modules, deploys a module by name and path, or"
                 "\n   undeploys/redeploys a module by name. Paths can point to a directory or"
-                "\n   to a JAR file."
+                "\n   to a JAR file. Killing a module is also possible, which forces the"
+                "\n   module to a halt, whatever its state."
                 "\n"
                 "\n repl <start|stop> [port]"
                 "\n   Starts an nREPL at the specified port, or stops the current one, inside"
@@ -111,6 +112,12 @@
                                                      {:message (str "Redeployment of " name
                                                                     " timed out.")}))))
                    (println "Missing name argument."))
+      "kill" (if name
+               (future (println (:message (deref (modules/kill! (:modules systems) name)
+                                                 timeout
+                                                 {:message (str "Killing of " name
+                                                                " timed out.")}))))
+               (println "Missing name argument."))
       (if action
         (println (str "Unknown action '" action "', see help."))
         (println "Missing action argument, see help.")))))

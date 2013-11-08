@@ -32,6 +32,9 @@
     "Try to redeploy the module with the specified name. A promise is
   returned, which will eventually hold a Response record.")
 
+  (kill! [this name]
+    "Kills a module, whatever it's state.")
+
   (register-notifier! [this name f]
     "Register a notifier function by name, which is called on events
   happening regarding the modules. The function takes two arguments. The
@@ -240,6 +243,16 @@
       (let [promise (promise)]
         (send-to-module this name handle-redeploy this promise)
         promise)
+      (future (Response. false (str "No module named " name " known.")))))
+
+  (kill! [this name]
+    (if-let [agent (@agents name)]
+      (let [box (:box @agent)]
+        (swap! agents dissoc name)
+        (when (-> box :project :containium :ring)
+          (remove-box (:ring systems) name))
+        (stop-box name box)
+        (future (Response. true (str "Module " name " successfully killed."))))
       (future (Response. false (str "No module named " name " known.")))))
 
   (register-notifier! [_ name f]
