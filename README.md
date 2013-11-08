@@ -31,6 +31,8 @@ For a module to be deployable in Containium, it needs to have a `:containium` co
 
 - `:ring`, this optional entry is specified whenever a Ring handler within the module needs to be registered inside the Containium. The value of this entry is a map, which must contain at least a `:handler` entry, having a namespace qualified symbol pointing to the handler function. Optionally, one may specify a `:context-path` entry, having a String containing the context path one whishes to run the Ring app in. Note that the `:uri` entry inside a Ring request map does not contain the context in case a `:context-path` entry is specified. Also note that when a module with a Ring app is deployed, the handler is automatically registered in the root Ring server, i.e. one does not have to do this oneself.
 
+- `:isolates`, this entry will be appended to the `spec.clj` Boxure :isolates configuration. Details are described in the `boxure.core/boxure` documentation.
+
 
 ### Module configuration map
 
