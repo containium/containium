@@ -41,8 +41,11 @@
       (if-let [errors (seq (check-project project))]
         (apply println "Could not start module" name "for the following reasons:\n  "
                (interpose "\n  " errors))
-        (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
-              module-config (meta-merge (:containium project) (:containium descriptor))
+        (let [module-config (meta-merge (:containium project) (:containium descriptor))
+              boxure-config (if-let [module-isolates (:isolates module-config)]
+                                    (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
+                             #_else boxure-config)
+              box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
