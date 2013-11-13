@@ -21,7 +21,8 @@
                  [org.scala-lang/scala-library "2.9.2"]
                  [kafka/core-kafka_2.9.2 "0.7.2"]
                  [com.taoensso/nippy "2.2.0"]
-                 [org.clojure/core.cache "0.6.3"]]
+                 [org.clojure/core.cache "0.6.3"]
+                 [boxure/netty-ring-adapter "0.4.7"]]
   :exclusions [org.clojure/clojure]
   :java-source-paths ["src-java"]
   :main containium.core
@@ -31,6 +32,7 @@
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
+             "-Xmx500m" ; max heap size.
              ]
   :repl-options {:port 13337}
   :global-vars {*warn-on-reflection* true}

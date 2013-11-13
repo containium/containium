@@ -199,7 +199,9 @@
                          :cassandra cassandra/embedded12
                          :elastic elastic/embedded
                          :kafka kafka/embedded
-                         :ring ring/http-kit
+                         :http-kit ring/http-kit
+                         :netty ring/netty
+                         :ring ring/distributed
                          :session-store cass-session/embedded
                          :modules modules/default-manager
                          :fs deployer/directory

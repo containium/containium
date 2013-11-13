@@ -4,7 +4,13 @@
 
 ;;;; Production settings.
 
-{:http-kit {:port 8080}
+{:http-kit {:port 8080
+            :max-body 52428800} ; 50 mb
+ :netty {:port 8090
+         :zero-copy false
+         :max-http-chunk-length 1073741824 ; 1 gb
+         :max-channel-memory-size 1048576 ; 1 mb
+         :max-total-memory-size 1048576} ; 1 mb
  :cassandra {:config-file "cassandra.yaml"}
  :session-store {:ttl 60}
  :kafka {:server {:port 9090

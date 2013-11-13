@@ -7,7 +7,8 @@
   an API to a ring server."
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [org.httpkit.server :refer (run-server)]
+            [org.httpkit.server :as httpkit]
+            [netty.ring.adapter :as netty]
             [boxure.core :as boxure])
   (:import [containium.systems Startable Stoppable]))
 
@@ -121,26 +122,33 @@
 (defrecord HttpKit [stop-fn app apps]
   Ring
   (upstart-box [_ name box]
+    (println "Adding module" name "to HTTP-kit handler.")
     (->> (box->ring-app name box)
          (swap! apps assoc name)
          (make-app)
          (reset! app)))
   (remove-box [_ name]
+    (println "Removing module" name "from HTTP-kit handler.")
     (->> (swap! apps dissoc name)
          (make-app)
          (reset! app)))
 
   Stoppable
-  (stop [_] (stop-fn)))
+  (stop [_]
+    (println "Stopping HTTP-kit server...")
+    (stop-fn)
+    (println "Stopped HTTP-kit server.")))
 
 
 (def http-kit
   (reify Startable
     (start [_ systems]
-      (let [config (require-system Config systems)
+      (let [config (get-config (require-system Config systems) :http-kit)
+            _ (println "Starting HTTP-kit server, using config" config)
             app (atom (make-app {}))
             app-fn (fn [request] (@app request))
-            stop-fn (run-server app-fn (get-config config :http-kit))]
+            stop-fn (httpkit/run-server app-fn config)]
+        (println "HTTP-Kit server started.")
         (HttpKit. stop-fn app (atom {}))))))
 
 
@@ -169,6 +177,62 @@
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :http-kit)
             _ (println "Starting test HTTP-Kit, using config" config "...")
-            stop-fn (run-server handler config)]
+            stop-fn (httpkit/run-server handler config)]
         (println "Started test HTTP-Kit.")
         (TestHttpKit. stop-fn)))))
+
+
+;;; Netty implementation.
+
+(defrecord Netty [stop-fn app apps]
+  Ring
+  (upstart-box [_ name box]
+    (println "Adding module" name "to Netty handler.")
+    (->> (box->ring-app name box)
+         (swap! apps assoc name)
+         (make-app)
+         (reset! app)))
+  (remove-box [_ name]
+    (println "Removing module" name "from Netty handler.")
+    (->> (swap! apps dissoc name)
+         (make-app)
+         (reset! app)))
+
+  Stoppable
+  (stop [_]
+    (println "Stopping Netty server...")
+    (stop-fn)
+    (println "Stopped Netty server.")))
+
+
+(def netty
+  (reify Startable
+    (start [_ systems]
+      (let [config (get-config (require-system Config systems) :netty)
+            _ (println "Starting Netty server, using config" config)
+            app (atom (make-app {}))
+            app-fn (fn [request] (@app request))
+            stop-fn (netty/start-server app-fn config)]
+        (println "Netty server started.")
+        (Netty. stop-fn app (atom {}))))))
+
+
+;;; Distribution of apps along multiple Ring server implementations.
+
+(defrecord DistributedRing [rings]
+  Ring
+  (upstart-box [_ name box]
+    (doseq [ring rings]
+      (upstart-box ring name box)))
+  (remove-box [_ name]
+    (doseq [ring rings]
+      (remove-box ring name))))
+
+
+(def distributed
+  (reify Startable
+    (start [_ systems]
+      (if-let [ring-systems (seq (filter (comp (partial satisfies? Ring) val) systems))]
+        (do (println "Initialising Ring distributer among servers:" (keys ring-systems))
+            (DistributedRing. (vals ring-systems)))
+        (throw (Exception. "No Ring systems have been started."))))))
