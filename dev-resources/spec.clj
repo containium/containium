@@ -11,6 +11,8 @@
          :max-http-chunk-length 1073741824 ; 1 gb
          :max-channel-memory-size 1048576 ; 1 mb
          :max-total-memory-size 1048576} ; 1 mb
+ :jetty9 {:port 8100
+          :join? false}
  :cassandra {:config-file "cassandra.yaml"}
  :session-store {:ttl 1}
  :kafka {:server {:port 9090

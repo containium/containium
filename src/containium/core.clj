@@ -201,6 +201,7 @@
                          :kafka kafka/embedded
                          :http-kit ring/http-kit
                          :netty ring/netty
+                         :jetty9 ring/jetty9
                          :ring ring/distributed
                          :session-store cass-session/embedded
                          :modules modules/default-manager
