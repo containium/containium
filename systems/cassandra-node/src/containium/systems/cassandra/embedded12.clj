@@ -12,12 +12,15 @@
             [clojure.string :refer (replace split)])
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification]
            [org.apache.cassandra.db ConsistencyLevel]
-           [org.apache.cassandra.db.marshal AbstractType]
+           [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DoubleType
+            EmptyType FloatType InetAddressType Int32Type ListType LongType MapType SetType
+            UTF8Type UUIDType]
            [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [containium ByteBufferInputStream]
            [java.io ByteArrayOutputStream]
-           [java.util Arrays List]
+           [java.util Arrays List Map Set UUID]
+           [java.net InetAddress]
            [java.nio CharBuffer ByteBuffer]
            [java.nio.charset Charset]))
 
@@ -43,28 +46,6 @@
       (copy (bytebuffer->inputstream bb) baos)
       (.toByteArray baos))))
 
-
-(defprotocol Encode
-  (encode [value]
-    "Encodes a Clojure value to a ByteBuffer."))
-
-(extend-protocol Encode
-  (Class/forName "[B")
-  (encode [value]
-    (ByteBuffer/wrap value))
-
-  String
-  (encode [value]
-    (let [encoder (.newEncoder (Charset/forName "UTF-8"))]
-      (.encode encoder (CharBuffer/wrap ^String value))))
-
-  Long
-  (encode [value]
-    (.putLong (ByteBuffer/allocate 8) value))
-
-  ByteBuffer
-  (encode [value]
-    value))
 
 
 ;;; Helper functions.
@@ -98,7 +79,6 @@
 ;;--- TODO: Test decoded types.
 (defn- decode-resultset
   [^ResultSet resultset]
-  (println resultset)
   (let [^List metas (.. resultset metadata names)]
     (for [^List row (.rows resultset)]
       (->> (for [[^ColumnSpecification meta ^ByteBuffer column] (zipmap metas row)
@@ -106,6 +86,32 @@
                        ^String name (.. meta name toString)]]
              [name (.compose type column)])
            (into {})))))
+
+
+(defn abstract-type
+  [value]
+  (if value
+    (condp instance? value
+      Boolean BooleanType/instance
+      ByteBuffer BytesType/instance
+      Double DoubleType/instance
+      Float FloatType/instance
+      InetAddress InetAddressType/instance
+      Integer Int32Type/instance
+      List (ListType/getInstance ^AbstractType (abstract-type (first value)))
+      Map (MapType/getInstance (abstract-type (ffirst value))
+                               (abstract-type (second (first value))))
+      Long LongType/instance
+      Set (SetType/getInstance ^AbstractType (abstract-type (first value)))
+      String UTF8Type/instance
+      UUID UUIDType/instance)
+    EmptyType/instance))
+
+
+(defn- encode-value
+  [value]
+  (let [^AbstractType dbtype (abstract-type value)]
+    (.decompose dbtype value)))
 
 
 ;;; Cassandra protocol implementation.
@@ -124,7 +130,8 @@
 (defn- do-prepared*
   [{:keys [query-state]} prepared consistency args]
   (let [consistency (kw->consistency consistency)
-        result (QueryProcessor/processPrepared prepared consistency query-state (map encode args))]
+        result (QueryProcessor/processPrepared prepared consistency query-state
+                                               (map encode-value args))]
     (when (instance? ResultMessage$Rows result)
       (decode-resultset (.result ^ResultMessage$Rows result)))))
 
