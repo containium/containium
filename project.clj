@@ -22,9 +22,10 @@
                  [kafka/core-kafka_2.9.2 "0.7.2"]
                  [com.taoensso/nippy "2.2.0"]
                  [org.clojure/core.cache "0.6.3"]]
-  :exclusions [org.clojure/clojure]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java]
   :java-source-paths ["src-java"]
   :main containium.core
+  :aot [containium.core]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
