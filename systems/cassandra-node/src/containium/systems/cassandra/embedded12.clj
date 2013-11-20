@@ -10,7 +10,8 @@
             [containium.systems.config :refer (Config get-config)]
             [clojure.java.io :refer (copy)]
             [clojure.string :refer (replace split)])
-  (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification]
+  (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
+            UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
            [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DoubleType
             EmptyType FloatType InetAddressType Int32Type ListType LongType MapType SetType
@@ -78,43 +79,81 @@
 ;;--- TODO: Test laziness.
 ;;--- TODO: Test decoded types.
 (defn- decode-resultset
-  [^ResultSet resultset]
+  [^ResultSet resultset keywordize?]
   (let [^List metas (.. resultset metadata names)]
     (for [^List row (.rows resultset)]
       (->> (for [[^ColumnSpecification meta ^ByteBuffer column] (zipmap metas row)
                  :let [^AbstractType type (.type meta)
                        ^String name (.. meta name toString)]]
              [name (.compose type column)])
-           (into {})))))
+           (reduce (fn [m [k v]] (assoc m (if keywordize? (keyword k) k) v)) {})))))
 
 
-(defn abstract-type
-  [value]
-  (if value
-    (condp instance? value
-      Boolean BooleanType/instance
-      ByteBuffer BytesType/instance
-      Double DoubleType/instance
-      Float FloatType/instance
-      InetAddress InetAddressType/instance
-      Integer Int32Type/instance
-      List (ListType/getInstance ^AbstractType (abstract-type (first value)))
-      Map (MapType/getInstance (abstract-type (ffirst value))
-                               (abstract-type (second (first value))))
-      Long LongType/instance
-      Set (SetType/getInstance ^AbstractType (abstract-type (first value)))
-      String UTF8Type/instance
-      UUID UUIDType/instance)
-    EmptyType/instance))
+(defprotocol Encode
+  (abstract-type [value] "Returns the AbstractType for the given value")
+  (encode-value [value] "Encodes a value to a Cassandra encoded ByteBuffer."))
 
+(extend-protocol Encode
+  Boolean
+  (abstract-type [value] BooleanType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
 
-(defn- encode-value
-  [value]
-  (let [^AbstractType dbtype (abstract-type value)]
-    (.decompose dbtype value)))
+  ByteBuffer
+  (abstract-type [value] BytesType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  Double
+  (abstract-type [value] DoubleType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  Float
+  (abstract-type [value] FloatType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  InetAddress
+  (abstract-type [value] InetAddressType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  Integer
+  (abstract-type [value] Int32Type/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  List
+  (abstract-type [value] (ListType/getInstance ^AbstractType (abstract-type (first value))))
+  (encode-value [value] (into [] (.decompose (abstract-type value) value)))
+
+  Map
+  (abstract-type [value] (MapType/getInstance (abstract-type (ffirst value))
+                                              (abstract-type (second (first value)))))
+  (encode-value [value] (into {} (.decompose (abstract-type value) value)))
+
+  Long
+  (abstract-type [value] LongType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  Set
+  (abstract-type [value] (SetType/getInstance ^AbstractType (abstract-type (first value))))
+  (encode-value [value] (into #{} (.decompose (abstract-type value) value)))
+
+  String
+  (abstract-type [value] UTF8Type/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  UUID
+  (abstract-type [value] UUIDType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  nil
+  (abstract-type [value] EmptyType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value)))
 
 
 ;;; Cassandra protocol implementation.
+
+(def ^:dynamic *consistency* nil)
+
+(def ^:dynamic *keywordize* false)
+
 
 (defn- prepare**
   [{:keys [client-state]} query]
@@ -128,25 +167,32 @@
 
 
 (defn- do-prepared*
-  [{:keys [query-state]} prepared consistency args]
+  [{:keys [query-state]} prepared {:keys [consistency values raw? keywordize?]
+                                   :or {consistency *consistency*
+                                        keywordize? *keywordize*}}]
+  (assert consistency "Missing :consistency key and *consistency* not bound.")
   (let [consistency (kw->consistency consistency)
         result (QueryProcessor/processPrepared prepared consistency query-state
-                                               (map encode-value args))]
+                                               (map encode-value values))]
     (when (instance? ResultMessage$Rows result)
-      (decode-resultset (.result ^ResultMessage$Rows result)))))
+      (if raw?
+        (UntypedResultSet. (.result ^ResultMessage$Rows result))
+        (decode-resultset (.result ^ResultMessage$Rows result) keywordize?)))))
 
 
 (defn- has-keyspace*
   [record name]
   (let [pq (prepare* record "SELECT * FROM system.schema_keyspaces WHERE keyspace_name = ?;")]
-    (not (.isEmpty (do-prepared* record pq :one [name])))))
+    (not (.isEmpty ^UntypedResultSet (do-prepared* record pq {:consistency :one
+                                                              :values [name]
+                                                              :raw? true})))))
 
 
 (defn- write-schema*
   [record schema-str]
   (doseq [s (cql-statements schema-str)
           :let [ps (prepare* record s)]]
-    (do-prepared* record ps :one [])))
+    (do-prepared* record ps {:consistency :one, :raw? true})))
 
 
 (defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state]
@@ -154,23 +200,29 @@
   (prepare [this query]
     (prepare* this query))
 
-  (do-prepared [this prepared consistency args]
-    (do-prepared* this prepared consistency args))
+  (do-prepared [this prepared args]
+    (do-prepared* this prepared args))
 
   (has-keyspace? [this name]
     (has-keyspace* this name))
+
+  (keyspaced [this name]
+    (let [keyspaced-state (doto (ClientState. true) (.setKeyspace name))]
+      (EmbeddedCassandra12. nil nil keyspaced-state (QueryState. keyspaced-state))))
 
   (write-schema [this schema-str]
     (write-schema* this schema-str))
 
   Stoppable
   (stop [this]
-    (println "Stopping embedded Cassandra instance...")
-    (.deactivate daemon)
-    (.interrupt thread)
-    (println "Waiting for Cassandra to be stopped...")
-    (while (some-> daemon .nativeServer .isRunning) (Thread/sleep 200))
-    (println "Embedded Cassandra instance stopped.")))
+    (if (and daemon thread)
+      (do (println "Stopping embedded Cassandra instance...")
+          (.deactivate daemon)
+          (.interrupt thread)
+          (println "Waiting for Cassandra to be stopped...")
+          (while (some-> daemon .nativeServer .isRunning) (Thread/sleep 200))
+          (println "Embedded Cassandra instance stopped."))
+      (println "Cannot call stop on a keyspaced instance."))))
 
 
 (def embedded12
