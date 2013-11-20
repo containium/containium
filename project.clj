@@ -46,7 +46,19 @@
                     containium.systems.kafka
                     containium.modules
                     containium.systems.repl
-                    containium.systems.ring]})
-
-;;; Sync this file with pom.xml.
-;;; ---TODO: Use the :pom-plugins key when Leiningen 2.3.4 is released.
+                    containium.systems.ring]}
+  :pom-plugins [[org.codehaus.mojo/build-helper-maven-plugin "1.7"
+                 {:executions [:execution
+                               [:id "add-source"]
+                               [:phase "generate-sources"]
+                               [:goals [:goal "add-source"]]
+                               [:configuration
+                                [:sources [:source "src-java"]]]]}]
+                [com.theoryinpractise/clojure-maven-plugin "1.3.15"
+                 {:extensions "true"
+                  :configuration ([:sourceDirectories [:sourceDirectory "src"]]
+                                  [:temporaryOutputDirectory "true"])
+                  :executions [:execution
+                               [:id "compile-clojure"]
+                               [:phase "compile"]
+                               [:goals [:goal "compile"]]]}]])
