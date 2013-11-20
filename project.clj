@@ -48,17 +48,10 @@
                     containium.modules
                     containium.systems.repl
                     containium.systems.ring]}
-  :pom-plugins [[org.codehaus.mojo/build-helper-maven-plugin "1.7"
-                 {:executions [:execution
-                               [:id "add-source"]
-                               [:phase "generate-sources"]
-                               [:goals [:goal "add-source"]]
-                               [:configuration
-                                [:sources [:source "src-java"]]]]}]
-                [com.theoryinpractise/clojure-maven-plugin "1.3.15"
+  :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
                   :configuration ([:sourceDirectories [:sourceDirectory "src"]]
-                                  [:temporaryOutputDirectory "true"])
+                                  [:temporaryOutputDirectory "false"])
                   :executions [:execution
                                [:id "compile-clojure"]
                                [:phase "compile"]
