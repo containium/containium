@@ -10,6 +10,11 @@
             [containium.systems.cassandra :refer (Cassandra cql-statements)]))
 
 
+(def ^:dynamic *consistency* nil)
+
+(def ^:dynamic *keywordize* false)
+
+
 (defn- prepare*
   [{:keys [session]} query-str]
   (alia/prepare session query-str))
@@ -17,7 +22,9 @@
 
 (defn- do-prepared*
   [{:keys [session]} statement args]
-  (apply alia/execute session statement (interleave (keys args) (vals args))))
+  (let [args (merge {:consistency *consistency*, :keywordize? *keywordize*} args)]
+    (assert (:consistency args) "Missing :consistency key and *consistency* not bound.")
+    (apply alia/execute session statement (interleave (keys args) (vals args)))))
 
 
 (defn- has-keyspace*
