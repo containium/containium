@@ -17,7 +17,7 @@
 
 (defn- do-prepared*
   [{:keys [session]} statement args]
-  (apply alia/execute session statement (-> args seq flatten)))
+  (apply alia/execute session statement (interleave (keys args) (vals args))))
 
 
 (defn- has-keyspace*
@@ -65,7 +65,9 @@
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) config-key)
             _ (println "Starting Alia 1 system, using config:" config)
-            cluster (apply alia/cluster (:contact-points config) (-> config seq flatten))
+            cluster (apply alia/cluster
+                           (:contact-points config)
+                           (interleave (keys config) (vals config)))
             session (alia/connect cluster)]
         (println "Alia 1 system started.")
         (Alia1. cluster session)))))
