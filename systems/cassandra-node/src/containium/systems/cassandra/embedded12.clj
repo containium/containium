@@ -13,9 +13,9 @@
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
             UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
-           [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DoubleType
-            EmptyType FloatType InetAddressType Int32Type ListType LongType MapType SetType
-            UTF8Type UUIDType]
+           [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DecimalType
+            DoubleType EmptyType FloatType InetAddressType Int32Type IntegerType ListType LongType
+            MapType SetType UTF8Type UUIDType]
            [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [containium ByteBufferInputStream]
@@ -23,7 +23,8 @@
            [java.util Arrays List Map Set UUID]
            [java.net InetAddress]
            [java.nio CharBuffer ByteBuffer]
-           [java.nio.charset Charset]))
+           [java.nio.charset Charset]
+           [java.math BigInteger BigDecimal]))
 
 
 ;;; Encoding functions.
@@ -76,8 +77,20 @@
     :each-quorum ConsistencyLevel/EACH_QUORUM))
 
 
-;;--- TODO: Test laziness.
-;;--- TODO: Test decoded types.
+(defn- postprocess-row
+  [keywordize? row]
+  (reduce (fn [m [k v]]
+            (assoc m
+              (if keywordize? (keyword k) k)
+              (condp instance? v
+                Map (into {} v)
+                Set (into #{} v)
+                List (into [] v)
+                v)))
+          {}
+          row))
+
+
 (defn- decode-resultset
   [^ResultSet resultset keywordize?]
   (let [^List metas (.. resultset metadata names)]
@@ -86,7 +99,7 @@
                  :let [^AbstractType type (.type meta)
                        ^String name (.. meta name toString)]]
              [name (.compose type column)])
-           (reduce (fn [m [k v]] (assoc m (if keywordize? (keyword k) k) v)) {})))))
+           (postprocess-row keywordize?)))))
 
 
 (defprotocol Encode
@@ -94,6 +107,14 @@
   (encode-value [value] "Encodes a value to a Cassandra encoded ByteBuffer."))
 
 (extend-protocol Encode
+  BigDecimal
+  (abstract-type [value] DecimalType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
+  BigInteger
+  (abstract-type [value] IntegerType/instance)
+  (encode-value [value] (.decompose (abstract-type value) value))
+
   Boolean
   (abstract-type [value] BooleanType/instance)
   (encode-value [value] (.decompose (abstract-type value) value))
@@ -120,12 +141,12 @@
 
   List
   (abstract-type [value] (ListType/getInstance ^AbstractType (abstract-type (first value))))
-  (encode-value [value] (into [] (.decompose (abstract-type value) value)))
+  (encode-value [value] (.decompose (abstract-type value) value))
 
   Map
   (abstract-type [value] (MapType/getInstance (abstract-type (ffirst value))
                                               (abstract-type (second (first value)))))
-  (encode-value [value] (into {} (.decompose (abstract-type value) value)))
+  (encode-value [value] (.decompose (abstract-type value) value))
 
   Long
   (abstract-type [value] LongType/instance)
@@ -133,7 +154,7 @@
 
   Set
   (abstract-type [value] (SetType/getInstance ^AbstractType (abstract-type (first value))))
-  (encode-value [value] (into #{} (.decompose (abstract-type value) value)))
+  (encode-value [value] (.decompose (abstract-type value) value))
 
   String
   (abstract-type [value] UTF8Type/instance)
