@@ -10,12 +10,12 @@
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
             UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
-           [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DecimalType
+           [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DateType DecimalType
             DoubleType EmptyType FloatType InetAddressType Int32Type IntegerType ListType LongType
             MapType SetType UTF8Type UUIDType]
            [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
-           [java.util List Map Set UUID]
+           [java.util List Map Set UUID Date]
            [java.net InetAddress]
            [java.nio CharBuffer ByteBuffer]
            [java.nio.charset Charset]
@@ -47,7 +47,7 @@
               (condp instance? v
                 Map (into {} v)
                 Set (into #{} v)
-                List (into [] v)
+                List (seq v)
                 v)))
           {}
           row))
@@ -83,6 +83,10 @@
 
   ByteBuffer
   (abstract-type [value] BytesType/instance)
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
+
+  Date
+  (abstract-type [value] DateType/instance)
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Double
