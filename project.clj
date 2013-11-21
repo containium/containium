@@ -23,9 +23,10 @@
                  [com.taoensso/nippy "2.2.0"]
                  [org.clojure/core.cache "0.6.3"]
                  [cc.qbits/alia "1.9.2"]]
-  :exclusions [org.clojure/clojure]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java]
   :java-source-paths ["src-java"]
   :main containium.core
+  :aot [containium.core]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
@@ -47,7 +48,12 @@
                     containium.systems.kafka
                     containium.modules
                     containium.systems.repl
-                    containium.systems.ring]})
-
-;;; Sync this file with pom.xml.
-;;; ---TODO: Use the :pom-plugins key when Leiningen 2.3.4 is released.
+                    containium.systems.ring]}
+  :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
+                 {:extensions "true"
+                  :configuration ([:sourceDirectories [:sourceDirectory "src"]]
+                                  [:temporaryOutputDirectory "false"])
+                  :executions [:execution
+                               [:id "compile-clojure"]
+                               [:phase "compile"]
+                               [:goals [:goal "compile"]]]}]])
