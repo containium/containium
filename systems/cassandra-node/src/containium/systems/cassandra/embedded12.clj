@@ -4,12 +4,9 @@
 
 (ns containium.systems.cassandra.embedded12
   "The embedded Cassandra 1.2 implementation."
-  (:refer-clojure :exclude [replace])
   (:require [containium.systems :refer (Startable Stoppable require-system)]
-            [containium.systems.cassandra :refer (Cassandra)]
-            [containium.systems.config :refer (Config get-config)]
-            [clojure.java.io :refer (copy)]
-            [clojure.string :refer (replace split)])
+            [containium.systems.cassandra :refer (Cassandra cql-statements)]
+            [containium.systems.config :refer (Config get-config)])
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
             UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
@@ -18,49 +15,14 @@
             MapType SetType UTF8Type UUIDType]
            [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
-           [containium ByteBufferInputStream]
-           [java.io ByteArrayOutputStream]
-           [java.util Arrays List Map Set UUID]
+           [java.util List Map Set UUID]
            [java.net InetAddress]
            [java.nio CharBuffer ByteBuffer]
            [java.nio.charset Charset]
            [java.math BigInteger BigDecimal]))
 
 
-;;; Encoding functions.
-
-(defn bytebuffer->inputstream
-  "Returns an InputStream reading from a ByteBuffer."
-  [^ByteBuffer bb]
-  (ByteBufferInputStream. bb))
-
-
-(defn bytebuffer->bytes
-  "Converts a ByteBuffer to a byte array. If the ByteBuffer is backed
-  by an array, a copy of the relevant part of that array is returned.
-  Otherwise, the bytes are streamed into a byte array."
-  [^ByteBuffer bb]
-  (if (.hasArray bb)
-    (Arrays/copyOfRange (.array bb)
-                        (+ (.position bb) (.arrayOffset bb))
-                        (+ (.position bb) (.arrayOffset bb) (.limit bb)))
-    (let [baos (ByteArrayOutputStream. (.remaining bb))]
-      (copy (bytebuffer->inputstream bb) baos)
-      (.toByteArray baos))))
-
-
-
 ;;; Helper functions.
-
-(defn- cql-statements
-  "Returns the CQL statements from the specified String in a sequence."
-  [s]
-  (let [no-comments (-> s
-                        (replace #"(?s)/\*.*?\*/" "")
-                        (replace #"--.*$" "")
-                        (replace #"//.*$" ""))]
-    (map #(str % ";") (split no-comments #"\s*;\s*"))))
-
 
 (defn- kw->consistency
   "Given a consistency keyword, returns the corresponding
@@ -109,64 +71,64 @@
 (extend-protocol Encode
   BigDecimal
   (abstract-type [value] DecimalType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   BigInteger
   (abstract-type [value] IntegerType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Boolean
   (abstract-type [value] BooleanType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   ByteBuffer
   (abstract-type [value] BytesType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Double
   (abstract-type [value] DoubleType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Float
   (abstract-type [value] FloatType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   InetAddress
   (abstract-type [value] InetAddressType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Integer
   (abstract-type [value] Int32Type/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   List
   (abstract-type [value] (ListType/getInstance ^AbstractType (abstract-type (first value))))
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Map
   (abstract-type [value] (MapType/getInstance (abstract-type (ffirst value))
                                               (abstract-type (second (first value)))))
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Long
   (abstract-type [value] LongType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Set
   (abstract-type [value] (SetType/getInstance ^AbstractType (abstract-type (first value))))
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   String
   (abstract-type [value] UTF8Type/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   UUID
   (abstract-type [value] UUIDType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   nil
   (abstract-type [value] EmptyType/instance)
-  (encode-value [value] (.decompose (abstract-type value) value)))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value)))
 
 
 ;;; Cassandra protocol implementation.

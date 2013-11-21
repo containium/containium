@@ -3,7 +3,14 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems.cassandra
-  "The public API to Cassandra systems.")
+  "The public API to Cassandra systems."
+  (:refer-clojure :exclude [replace])
+  (:require [clojure.java.io :refer (copy)]
+            [clojure.string :refer (replace split)])
+  (:import [containium ByteBufferInputStream]
+           [java.io ByteArrayOutputStream]
+           [java.nio ByteBuffer]
+           [java.util Arrays]))
 
 
 (defprotocol Cassandra
@@ -44,3 +51,36 @@
     "Writes a CQL schema String to the database. Comments are filtered
     out automatically and the statements are executed in sequence. The
     return value is not defined, and is better ignored."))
+
+
+;;; Helper functions.
+
+(defn bytebuffer->inputstream
+  "Returns an InputStream reading from a ByteBuffer."
+  [^ByteBuffer bb]
+  (ByteBufferInputStream. bb))
+
+
+(defn bytebuffer->bytes
+  "Converts a ByteBuffer to a byte array. If the ByteBuffer is backed
+  by an array, a copy of the relevant part of that array is returned.
+  Otherwise, the bytes are streamed into a byte array."
+  [^ByteBuffer bb]
+  (if (.hasArray bb)
+    (Arrays/copyOfRange (.array bb)
+                        (+ (.position bb) (.arrayOffset bb))
+                        (+ (.position bb) (.arrayOffset bb) (.limit bb)))
+    (let [baos (ByteArrayOutputStream. (.remaining bb))]
+      (copy (bytebuffer->inputstream bb) baos)
+      (.toByteArray baos))))
+
+
+(defn cql-statements
+  "Returns the CQL statement Strings from the specified schema String
+  in a sequence."
+  [s]
+  (let [no-comments (-> s
+                        (replace #"(?s)/\*.*?\*/" "")
+                        (replace #"--.*$" "")
+                        (replace #"//.*$" ""))]
+    (map #(str % ";") (split no-comments #"\s*;\s*"))))

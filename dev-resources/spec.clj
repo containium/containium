@@ -6,6 +6,8 @@
 
 {:http-kit {:port 8080}
  :cassandra {:config-file "cassandra.yaml"}
+ :alia {:contact-points ["localhost"]
+        :port 9042}
  :session-store {:ttl 1}
  :kafka {:server {:port 9090
                   :brokerid 1
