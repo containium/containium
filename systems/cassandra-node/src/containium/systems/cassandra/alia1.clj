@@ -45,6 +45,15 @@
   (prepare [this query-str]
     (prepare* this query-str))
 
+  (do-prepared [this statement]
+    (do-prepared* this statement nil nil))
+
+  (do-prepared [this statement opts-values]
+    (cond (sequential? opts-values) (do-prepared* this statement nil opts-values)
+          (map? opts-values) (do-prepared* this statement opts-values nil)
+          :else (throw (IllegalArgumentException.
+                        "Parameter opts-values must be a map or sequence."))))
+
   (do-prepared [this statement opts values]
     (do-prepared* this statement opts values))
 

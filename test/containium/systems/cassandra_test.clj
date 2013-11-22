@@ -73,9 +73,9 @@
               embed-select (api/prepare embedded select-cql)
               alia-select (api/prepare alia select-cql)
               embed-result (first (api/do-prepared embedded embed-select
-                                                   {:consistency :one, :keywordize? true} nil))
+                                                   {:consistency :one, :keywordize? true}))
               alia-result (first (api/do-prepared alia alia-select
-                                                   {:consistency :one, :keywordize? true} nil))]
+                                                   {:consistency :one, :keywordize? true}))]
           (is (instances? java.net.Inet4Address (:it embed-result) (:it alia-result)))
           (is (instances? java.lang.String (:vc embed-result) (:vc alia-result)))
           (is (instances? clojure.lang.PersistentArrayMap (:ma embed-result) (:ma alia-result)))

@@ -19,7 +19,7 @@
     directly, as it differs per implementation. It can be used for the
     `do-prepared` function.")
 
-  (do-prepared [this statement opts values]
+  (do-prepared [this statement] [this statement opts-values] [this statement opts values]
     "Executes a prepared query. The values argument is a sequence
     containing the arguments for the statement, or nil. The opts
     argument needs to be a map, with the following keys:
@@ -36,7 +36,11 @@
     :keywordize? - When set to true, the column names are keywordized.
                    Default is false. One can also bind the
                    implementation's *keywordize* dynamic variable.
-                   This option is ignored when :raw? is set to true.")
+                   This option is ignored when :raw? is set to true.
+
+    The opts-values argument can be a map or a sequence. If it is a
+    map, it is regarded as an options map. Otherwise it is regarded as
+    a values sequence.")
 
   (has-keyspace? [this name]
     "Returns a boolean indicating whether the named keyspace exists.")
