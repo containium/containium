@@ -25,9 +25,8 @@
 (defn- read-session-data
   [cassandra read-query key]
   (when-let [^UntypedResultSet data (do-prepared cassandra read-query
-                                                 {:consistency session-consistency
-                                                  :values [key]
-                                                  :raw? true})]
+                                                 {:consistency session-consistency, :raw? true}
+                                                 [key])]
     (when-not (.isEmpty data)
       (-> (.. data one (getBytes "data") slice)
           bytebuffer->bytes
@@ -36,14 +35,12 @@
 
 (defn- write-session-data
   [cassandra write-query key data]
-  (do-prepared cassandra write-query {:consistency session-consistency
-                                      :values [(freeze data) key]}))
+  (do-prepared cassandra write-query {:consistency session-consistency} [(freeze data) key]))
 
 
 (defn- remove-session-data
   [cassandra remove-query key]
-  (do-prepared cassandra remove-query {:consistency session-consistency
-                                       :values [key]}))
+  (do-prepared cassandra remove-query {:consistency session-consistency} [key]))
 
 
 (defrecord EmbeddedCassandraStore [cache ttl cassandra read-q write-q remove-q]

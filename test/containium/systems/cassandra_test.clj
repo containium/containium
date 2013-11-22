@@ -63,19 +63,19 @@
                               "varchar" (BigInteger. "9") "key"])]
 
         ;; Test update using embedded.
-        (api/do-prepared embedded embed-update {:consistency :one, :values (mk-values)})
+        (api/do-prepared embedded embed-update {:consistency :one} (mk-values))
 
         ;; Test update using alia.
-        (api/do-prepared alia alia-update {:consistency :one, :values (mk-values)})
+        (api/do-prepared alia alia-update {:consistency :one} (mk-values))
 
         ;; Retrieve data from both embedded and alia, and test the types.
         (let [select-cql "SELECT * FROM test.types;"
               embed-select (api/prepare embedded select-cql)
               alia-select (api/prepare alia select-cql)
               embed-result (first (api/do-prepared embedded embed-select
-                                                   {:consistency :one, :keywordize? true}))
+                                                   {:consistency :one, :keywordize? true} nil))
               alia-result (first (api/do-prepared alia alia-select
-                                                   {:consistency :one, :keywordize? true}))]
+                                                   {:consistency :one, :keywordize? true} nil))]
           (is (instances? java.net.Inet4Address (:it embed-result) (:it alia-result)))
           (is (instances? java.lang.String (:vc embed-result) (:vc alia-result)))
           (is (instances? clojure.lang.PersistentArrayMap (:ma embed-result) (:ma alia-result)))

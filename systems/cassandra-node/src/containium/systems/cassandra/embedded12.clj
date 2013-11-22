@@ -26,7 +26,7 @@
 
 (defn- kw->consistency
   "Given a consistency keyword, returns the corresponding
-  ConsistencyLevel instance."
+  ConsistencyLevel instance, or nil."
   [kw]
   (case kw
     :any ConsistencyLevel/ANY
@@ -36,7 +36,8 @@
     :quorum ConsistencyLevel/QUORUM
     :all ConsistencyLevel/ALL
     :local-quorum ConsistencyLevel/LOCAL_QUORUM
-    :each-quorum ConsistencyLevel/EACH_QUORUM))
+    :each-quorum ConsistencyLevel/EACH_QUORUM
+    nil))
 
 
 (defn- postprocess-row
@@ -154,32 +155,30 @@
 
 
 (defn- do-prepared*
-  [{:keys [query-state]} prepared {:keys [consistency values raw? keywordize?]
-                                   :or {consistency *consistency*
-                                        keywordize? *keywordize*}}]
-  (assert consistency "Missing :consistency key and *consistency* not bound.")
-  (let [consistency (kw->consistency consistency)
-        result (QueryProcessor/processPrepared prepared consistency query-state
+  [{:keys [query-state]} statement opts values]
+  (let [consistency (kw->consistency (get opts :consistency *consistency*))
+        _ (assert consistency "Missing :consistency and *consistency* not bound.")
+        result (QueryProcessor/processPrepared statement consistency query-state
                                                (map encode-value values))]
     (when (instance? ResultMessage$Rows result)
-      (if raw?
+      (if (:raw? opts)
         (UntypedResultSet. (.result ^ResultMessage$Rows result))
-        (decode-resultset (.result ^ResultMessage$Rows result) keywordize?)))))
+        (decode-resultset (.result ^ResultMessage$Rows result)
+                          (get opts :keywordize? *keywordize*))))))
 
 
 (defn- has-keyspace*
   [record name]
   (let [pq (prepare* record "SELECT * FROM system.schema_keyspaces WHERE keyspace_name = ?;")]
-    (not (.isEmpty ^UntypedResultSet (do-prepared* record pq {:consistency :one
-                                                              :values [name]
-                                                              :raw? true})))))
+    (not (.isEmpty ^UntypedResultSet
+                   (do-prepared* record pq {:consistency :one, :raw? true} [name])))))
 
 
 (defn- write-schema*
   [record schema-str]
   (doseq [s (cql-statements schema-str)
           :let [ps (prepare* record s)]]
-    (do-prepared* record ps {:consistency :one, :raw? true})))
+    (do-prepared* record ps {:consistency :one, :raw? true} nil)))
 
 
 (defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state]
@@ -187,8 +186,8 @@
   (prepare [this query]
     (prepare* this query))
 
-  (do-prepared [this prepared args]
-    (do-prepared* this prepared args))
+  (do-prepared [this statement opts values]
+    (do-prepared* this statement opts values))
 
   (has-keyspace? [this name]
     (has-keyspace* this name))

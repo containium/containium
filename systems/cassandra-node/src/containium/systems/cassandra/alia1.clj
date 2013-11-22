@@ -21,23 +21,23 @@
 
 
 (defn- do-prepared*
-  [{:keys [session]} statement args]
-  (let [args (merge {:consistency *consistency*, :keywordize? *keywordize*} args)]
-    (assert (:consistency args) "Missing :consistency key and *consistency* not bound.")
+  [{:keys [session]} statement opts values]
+  (let [args (merge {:consistency *consistency*, :keywordize? *keywordize*} opts {:values values})]
+    (assert (:consistency opts) "Missing :consistency key and *consistency* not bound.")
     (apply alia/execute session statement (interleave (keys args) (vals args)))))
 
 
 (defn- has-keyspace*
   [record name]
   (let [pq (prepare* record "SELECT * FROM system.schema_keyspaces WHERE keyspace_name = ?;")]
-    (not (empty? (do-prepared* record pq {:consistency :one :values [name]})))))
+    (not (empty? (do-prepared* record pq {:consistency :one} [name])))))
 
 
 (defn- write-schema*
   [record schema-str]
   (doseq [s (cql-statements schema-str)
           :let [ps (prepare* record s)]]
-    (do-prepared* record ps {:consistency :one})))
+    (do-prepared* record ps {:consistency :one} nil)))
 
 
 (defrecord Alia1 [cluster session]
@@ -45,8 +45,8 @@
   (prepare [this query-str]
     (prepare* this query-str))
 
-  (do-prepared [this statement args]
-    (do-prepared* this statement args))
+  (do-prepared [this statement opts values]
+    (do-prepared* this statement opts values))
 
   (has-keyspace? [this name]
     (has-keyspace* this name))

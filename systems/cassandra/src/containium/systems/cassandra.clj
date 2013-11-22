@@ -19,13 +19,10 @@
     directly, as it differs per implementation. It can be used for the
     `do-prepared` function.")
 
-  (do-prepared [this statement args]
-    "Executes a prepared query. The args argument needs to be a map,
-    with the following keys:
-
-    :values - A vector containing the arguments for the statement.
-                   This key is optional when the statement does not
-                   need any values.
+  (do-prepared [this statement opts values]
+    "Executes a prepared query. The values argument is a sequence
+    containing the arguments for the statement, or nil. The opts
+    argument needs to be a map, with the following keys:
 
     :consistency - The value is one of :any, :one, :two, :three,
                    :quorum, :all, :local-quorum or :each-quorum. This
@@ -45,7 +42,7 @@
     "Returns a boolean indicating whether the named keyspace exists.")
 
   (keyspaced [this name]
-    "Returns a new instance that is set to the given keyspace.")
+    "Returns an instance that is set to the given keyspace.")
 
   (write-schema [this schema-str]
     "Writes a CQL schema String to the database. Comments are filtered
