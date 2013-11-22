@@ -56,17 +56,16 @@
                                           WHERE key=?;"
             embed-update (api/prepare embedded update-cql)
             alia-update (api/prepare alia update-cql)
-            mk-values (fn [] [1 (ByteBuffer/wrap (.getBytes "foo")) true (BigDecimal. "1.1")
-                              1.2 (Float. 1.3) (InetAddress/getByName "127.0.0.1") (Integer. 2)
-                              [3 4] {"bar" 5 "baz" 6} #{7 8} "text" (new Date)
-                              (UUID/randomUUID) #uuid "FE2B4360-28C6-11E2-81C1-0800200C9A66"
-                              "varchar" (BigInteger. "9") "key"])]
+            values [1 (ByteBuffer/wrap (.getBytes "foo")) true (BigDecimal. "1.1") 1.2 (Float. 1.3)
+                    (InetAddress/getByName "127.0.0.1") (Integer. 2) [3 4] {"bar" 5 "baz" 6} #{7 8}
+                    "text" (new Date) (UUID/randomUUID) #uuid "FE2B4360-28C6-11E2-81C1-0800200C9A66"
+                    "varchar" (BigInteger. "9") "key"]]
 
         ;; Test update using embedded.
-        (api/do-prepared embedded embed-update {:consistency :one} (mk-values))
+        (api/do-prepared embedded embed-update {:consistency :one} values)
 
         ;; Test update using alia.
-        (api/do-prepared alia alia-update {:consistency :one} (mk-values))
+        (api/do-prepared alia alia-update {:consistency :one} values)
 
         ;; Retrieve data from both embedded and alia, and test the types.
         (let [select-cql "SELECT * FROM test.types;"

@@ -49,6 +49,7 @@
                 Map (into {} v)
                 Set (into #{} v)
                 List (seq v)
+                ByteBuffer (.slice v)
                 v)))
           {}
           row))
@@ -84,7 +85,7 @@
 
   ByteBuffer
   (abstract-type [value] BytesType/instance)
-  (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
+  (encode-value [value] (.decompose ^AbstractType (abstract-type value) (.slice ^ByteBuffer value)))
 
   Date
   (abstract-type [value] DateType/instance)
