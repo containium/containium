@@ -21,6 +21,21 @@
            :isolates ["containium.*"
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
-                      "ring.*"]}
+                      "ring.*"
+                      "leiningen.*"
+                      "robert.hooke"
+                      "cemerick.pomegranate.*"
+                      "bultitude.core*"
+                      "dynapath.*"
+                      ; Alia system deps
+                      "qbits.*"
+                      "clj.time.*"
+                      "cljs.core.async.*"
+                      "lamina.*"
+                      "taoensso.nippy.*"
+                      "potemkin.*"
+                      "flatland.*"
+                      "useful.*"
+                      ]}
  :repl {:port 13337}
  :fs {:deployments "dev-resources/deployments"}}
