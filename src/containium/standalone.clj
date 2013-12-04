@@ -3,16 +3,15 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.standalone
-  (:require 
-    [containium.systems                :refer (with-systems)]
-    [containium.systems.config         :refer (map-config)]
-    [containium.systems.repl           :as repl]
-    [containium.systems.elasticsearch  :as elastic]
-    [containium.systems.cassandra      :as cassandra]
-    [containium.systems.ring           :refer (test-http-kit)]
-    [ring.middleware.session.memory   :refer (memory-store)]
-    [clojure.java.io                  :as io]
-    ))
+  (:require [containium.systems :refer (with-systems)]
+            [containium.systems.config :refer (map-config)]
+            [containium.systems.repl :as repl]
+            [containium.systems.elasticsearch :as elastic]
+            [containium.systems.cassandra.embedded12 :as cassandra]
+            [containium.systems.ring :refer (test-http-kit)]
+            [ring.middleware.session.memory :refer (memory-store)]
+            [clojure.java.io :as io]))
+
 
 (defn run [spec containium-map]
   (prn "Ring handler: " (-> containium-map :ring :handler))
@@ -21,15 +20,15 @@
                          :session-store (memory-store)
                          :ring (test-http-kit (-> containium-map :ring :handler))
                          :elastic elastic/embedded
-                         :cassandra cassandra/embedded12
-                         ]
-    ((:start containium-map) systems {
-      :file (io/as-file ".")
-      :profiles []
-      :active-profiles []
-      :dev? true
-      :containium containium-map
-      })
-    (read-line)
-    ((:stop containium-map) systems))
+                         :cassandra cassandra/embedded12]
+    (let [start-fn (:start containium-map)
+          stop-fn (:stop containium-map)]
+      (start-fn systems
+                {:file (io/as-file ".")
+                 :profiles []
+                 :active-profiles []
+                 :dev? true
+                 :containium containium-map})
+      (read-line)
+      (stop-fn systems)))
   (shutdown-agents))

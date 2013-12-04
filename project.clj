@@ -14,7 +14,7 @@
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
                  [http-kit "2.1.10"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
-                 [org.apache.cassandra/cassandra-all "1.2.10" :exclusions [[javax.servlet/servlet-api]]]
+                 [org.apache.cassandra/cassandra-all "1.2.10" :exclusions [javax.servlet/servlet-api]]
                  [io.netty/netty "3.7.0.Final"]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
@@ -23,11 +23,12 @@
                  [com.taoensso/nippy "2.2.0"]
                  [org.clojure/core.cache "0.6.3"]
                  [boxure/netty-ring-adapter "0.4.7"]
-                 [info.sunng/ring-jetty9-adapter "0.2.0"]]
-  :exclusions [[org.clojure/clojure]
-               [org.mortbay.jetty/jetty]]
+                 [info.sunng/ring-jetty9-adapter "0.2.0"]
+                 [cc.qbits/alia "1.9.2"]]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
   :java-source-paths ["src-java"]
   :main containium.core
+  :aot [containium.core]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
@@ -50,7 +51,12 @@
                     containium.systems.kafka
                     containium.modules
                     containium.systems.repl
-                    containium.systems.ring]})
-
-;;; Sync this file with pom.xml.
-;;; ---TODO: Use the :pom-plugins key when Leiningen 2.3.4 is released.
+                    containium.systems.ring]}
+  :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
+                 {:extensions "true"
+                  :configuration ([:sourceDirectories [:sourceDirectory "src"]]
+                                  [:temporaryOutputDirectory "false"])
+                  :executions [:execution
+                               [:id "compile-clojure"]
+                               [:phase "compile"]
+                               [:goals [:goal "compile"]]]}]])

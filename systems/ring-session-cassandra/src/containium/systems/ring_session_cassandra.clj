@@ -5,17 +5,16 @@
 (ns containium.systems.ring-session-cassandra
   "This namespace contains the Containium system offering a Ring
   SessionStore backed by Cassandra and Nippy."
-  (:require [containium.systems :refer (require-system)]
+  (:require [containium.systems :refer (Startable require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.systems.cassandra :refer (EmbeddedCassandra prepare do-prepared
-                                                                   has-keyspace? write-schema
-                                                                   bytebuffer->bytes)]
+            [containium.systems.cassandra :refer (Cassandra prepare do-prepared
+                                                           has-keyspace? write-schema
+                                                           bytebuffer->bytes)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.core.cache :refer (ttl-cache-factory)]
             [clojure.java.io :refer (resource)])
-  (:import [containium.systems Startable]
-           [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
+  (:import [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
            [java.util UUID]))
 
 
@@ -25,7 +24,9 @@
 
 (defn- read-session-data
   [cassandra read-query key]
-  (when-let [^UntypedResultSet data (do-prepared cassandra read-query session-consistency [key])]
+  (when-let [^UntypedResultSet data (do-prepared cassandra read-query
+                                                 {:consistency session-consistency, :raw? true}
+                                                 [key])]
     (when-not (.isEmpty data)
       (-> (.. data one (getBytes "data") slice)
           bytebuffer->bytes
@@ -34,12 +35,12 @@
 
 (defn- write-session-data
   [cassandra write-query key data]
-  (do-prepared cassandra write-query session-consistency [(freeze data) key]))
+  (do-prepared cassandra write-query {:consistency session-consistency} [(freeze data) key]))
 
 
 (defn- remove-session-data
   [cassandra remove-query key]
-  (do-prepared cassandra remove-query session-consistency [key]))
+  (do-prepared cassandra remove-query {:consistency session-consistency} [key]))
 
 
 (defrecord EmbeddedCassandraStore [cache ttl cassandra read-q write-q remove-q]
@@ -88,7 +89,9 @@
 (def embedded
   (reify Startable
     (start [_ systems]
-      (let [cassandra (require-system EmbeddedCassandra systems)
+      (let [cassandra (:cassandra systems)
+            _ (assert cassandra (str "Embedded Cassandra Ring session store requires the embedded "
+                                     "Cassandra system, under the :cassandra key."))
             config (get-config (require-system Config systems) :session-store)
             _ (println "Starting embedded Cassandra Ring session store, using config"
                        config "...")

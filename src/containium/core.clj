@@ -4,7 +4,8 @@
 
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
-            [containium.systems.cassandra :as cassandra]
+            [containium.systems.cassandra.embedded12 :as cassandra]
+            [containium.systems.cassandra.alia1 :as alia1]
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
@@ -197,6 +198,7 @@
   [& [daemon? args]]
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                          :cassandra cassandra/embedded12
+                         :alia (alia1/alia1 :alia)
                          :elastic elastic/embedded
                          :kafka kafka/embedded
                          :http-kit ring/http-kit
