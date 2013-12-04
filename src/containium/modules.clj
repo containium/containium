@@ -94,7 +94,9 @@
       (if-let [module-map (try (edn/read-string (slurp file))
                             (catch Throwable ex (throw (Exception. (str "Failed reading module descriptor: " file) ex))))]
         (let [file-str (str (:file module-map))
-              file (File. (.getParent file) file-str)]
+              file (if-not (. (:file module-map) startsWith "/")
+                     (File. file file-str)
+                     #_else (File. file-str))]
           (when-not (. file exists) (throw (IllegalArgumentException. (str file " does not exist."))))
           (merge descriptor-defaults module-map {:file file}))
         ;; else if not a module descriptor file.
