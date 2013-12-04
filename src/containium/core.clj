@@ -8,6 +8,8 @@
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
+            [containium.systems.ring.http-kit :as http-kit]
+            [containium.systems.ring.jetty9 :as jetty9]
             [containium.systems.ring-session-cassandra :as cass-session]
             [containium.deployer :as deployer]
             [containium.systems.config :as config]
@@ -201,8 +203,8 @@
                          :cassandra cassandra/embedded12
                          :elastic elastic/embedded
                          :kafka kafka/embedded
-                         :http-kit ring/http-kit
-                         :jetty9 ring/jetty9
+                         :http-kit http-kit/http-kit
+                         :jetty9 jetty9/jetty9
                          :ring ring/distributed
                          :session-store cass-session/embedded
                          :modules modules/default-manager

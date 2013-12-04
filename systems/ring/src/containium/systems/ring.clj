@@ -5,12 +5,8 @@
 (ns containium.systems.ring
   "The interface definition of the Ring system. The Ring system offers
   an API to a ring server."
-  (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (Config get-config)]
-            [org.httpkit.server :as httpkit]
-            [ring.adapter.jetty9 :as jetty9]
-            [boxure.core :as boxure])
-  (:import [containium.systems Startable Stoppable]))
+  (:require [containium.systems :refer (Startable)]
+            [boxure.core :as boxure]))
 
 
 ;;; Public interface
@@ -30,7 +26,7 @@
     "Removes a box's ring handler from the ring server."))
 
 
-;;; HTTP-Kit implementation.
+;;; Generic logic used by Ring system implementations.
 
 (defrecord RingApp [name box handler-fn ring-conf])
 
@@ -74,7 +70,7 @@
         {:status 500 :body "Internal error."}))))
 
 
-(defn- make-app
+(defn make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
   [apps]
@@ -110,115 +106,18 @@
     result))
 
 
-(defn- box->ring-app
+(defn box->ring-app
   [name {:keys [project] :as box}]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
-        _ (assert (and ring-conf (:handler ring-conf)) (print-str ":ring system config requires a :handler, but ring-conf only contains: " ring-conf))
+        _ (assert (and ring-conf (:handler ring-conf))
+                  (print-str ":ring system config requires a :handler, "
+                             "but ring-conf only contains: " ring-conf))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))]
     (RingApp. name box handler-fn ring-conf)))
 
 
-(defrecord HttpKit [stop-fn app apps]
-  Ring
-  (upstart-box [_ name box]
-    (println "Adding module" name "to HTTP-kit handler.")
-    (->> (box->ring-app name box)
-         (swap! apps assoc name)
-         (make-app)
-         (reset! app)))
-  (remove-box [_ name]
-    (println "Removing module" name "from HTTP-kit handler.")
-    (->> (swap! apps dissoc name)
-         (make-app)
-         (reset! app)))
-
-  Stoppable
-  (stop [_]
-    (println "Stopping HTTP-kit server...")
-    (stop-fn)
-    (println "Stopped HTTP-kit server.")))
-
-
-(def http-kit
-  (reify Startable
-    (start [_ systems]
-      (let [config (get-config (require-system Config systems) :http-kit)
-            _ (println "Starting HTTP-kit server, using config" config)
-            app (atom (make-app {}))
-            app-fn (fn [request] (@app request))
-            stop-fn (httpkit/run-server app-fn config)]
-        (println "HTTP-Kit server started.")
-        (HttpKit. stop-fn app (atom {}))))))
-
-
-;;; HTTP-Kit implementation for testing.
-
-(defrecord TestHttpKit [stop-fn]
-  Ring
-  (upstart-box [_ _ _]
-    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
-  (remove-box [_ _]
-    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
-
-  Stoppable
-  (stop [_]
-    (println "Stopping test HTTP-Kit server...")
-    (stop-fn)
-    (println "Stopped test HTTP-Kit server.")))
-
-
-(defn test-http-kit
-  "Create a simple HTTP-kit server, serving the specified ring handler
-  function. This function returns a Startable, requiring a Config
-  system to be available when started."
-  [handler]
-  (reify Startable
-    (start [_ systems]
-      (let [config (get-config (require-system Config systems) :http-kit)
-            _ (println "Starting test HTTP-Kit, using config" config "...")
-            stop-fn (httpkit/run-server handler config)]
-        (println "Started test HTTP-Kit.")
-        (TestHttpKit. stop-fn)))))
-
-
-;;; Jetty 9 implementation.
-
-(defrecord Jetty9 [server app apps]
-  Ring
-  (upstart-box [_ name box]
-    (println "Adding module" name "to Jetty9 handler.")
-    (->> (box->ring-app name box)
-         (swap! apps assoc name)
-         (make-app)
-         (reset! app)))
-  (remove-box [_ name]
-    (println "Removing module" name "from Jetty9 handler.")
-    (->> (swap! apps dissoc name)
-         (make-app)
-         (reset! app)))
-
-  Stoppable
-  (stop [_]
-    (println "Stopping Jetty9 server...")
-    (.stop server)
-    (println "Stopped Jetty9 server.")))
-
-
-(def jetty9
-  (reify Startable
-    (start [_ systems]
-      (let [config (get-config (require-system Config systems) :jetty9)
-            _ (println "Starting Jetty9 server, using config" config)
-            app (atom (make-app {}))
-            app-fn (fn [request] (@app request))
-            server (jetty9/run-jetty app-fn config)]
-        (println "Jetty9 server started.")
-        (Jetty9. server app (atom {}))))))
-
-
-
-;;; Distribution of apps along multiple Ring server implementations.
+;;; Distribution implementation.
 
 (defrecord DistributedRing [rings]
   Ring
