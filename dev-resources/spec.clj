@@ -35,7 +35,7 @@
                       "cemerick.pomegranate.*"
                       "bultitude.core*"
                       "dynapath.*"
-                      ; Alia system deps
+                      ;; Alia system deps
                       "qbits.*"
                       "clj.time.*"
                       "cljs.core.async.*"
@@ -43,7 +43,6 @@
                       "taoensso.nippy.*"
                       "potemkin.*"
                       "flatland.*"
-                      "useful.*"
-                      ]}
+                      "useful.*"]}
  :repl {:port 13337}
  :fs {:deployments "dev-resources/deployments"}}

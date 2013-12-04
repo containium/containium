@@ -8,7 +8,6 @@
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [org.httpkit.server :as httpkit]
-            [netty.ring.adapter :as netty]
             [ring.adapter.jetty9 :as jetty9]
             [boxure.core :as boxure])
   (:import [containium.systems Startable Stoppable]))
@@ -181,41 +180,6 @@
             stop-fn (httpkit/run-server handler config)]
         (println "Started test HTTP-Kit.")
         (TestHttpKit. stop-fn)))))
-
-
-;;; Netty implementation.
-
-(defrecord Netty [stop-fn app apps]
-  Ring
-  (upstart-box [_ name box]
-    (println "Adding module" name "to Netty handler.")
-    (->> (box->ring-app name box)
-         (swap! apps assoc name)
-         (make-app)
-         (reset! app)))
-  (remove-box [_ name]
-    (println "Removing module" name "from Netty handler.")
-    (->> (swap! apps dissoc name)
-         (make-app)
-         (reset! app)))
-
-  Stoppable
-  (stop [_]
-    (println "Stopping Netty server...")
-    (stop-fn)
-    (println "Stopped Netty server.")))
-
-
-(def netty
-  (reify Startable
-    (start [_ systems]
-      (let [config (get-config (require-system Config systems) :netty)
-            _ (println "Starting Netty server, using config" config)
-            app (atom (make-app {}))
-            app-fn (fn [request] (@app request))
-            stop-fn (netty/start-server app-fn config)]
-        (println "Netty server started.")
-        (Netty. stop-fn app (atom {}))))))
 
 
 ;;; Jetty 9 implementation.

@@ -133,7 +133,9 @@
   [systems]
   (let [jline (ConsoleReader.)]
     (loop []
-      (let [[command & args] (map (fn [[normal quoted]] (or quoted normal)) (re-seq #"'([^']+)'|[^\s]+" (trim (.readLine jline "containium> "))))]
+      (let [[command & args] (map (fn [[normal quoted]] (or quoted normal))
+                                  (re-seq #"'([^']+)'|[^\s]+"
+                                          (trim (.readLine jline "containium> "))))]
         (case command
           nil (recur)
           "shutdown" nil

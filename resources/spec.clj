@@ -28,5 +28,19 @@
            :isolates ["containium.*"
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
-                      "ring.*"]}
+                      "ring.*"
+                      "leiningen.*"
+                      "robert.hooke"
+                      "cemerick.pomegranate.*"
+                      "bultitude.core*"
+                      "dynapath.*"
+                      ;; Alia system deps
+                      "qbits.*"
+                      "clj.time.*"
+                      "cljs.core.async.*"
+                      "lamina.*"
+                      "taoensso.nippy.*"
+                      "potemkin.*"
+                      "flatland.*"
+                      "useful.*"]}
  :fs {:deployments "deployments"}}

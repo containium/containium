@@ -22,9 +22,12 @@
                  [kafka/core-kafka_2.9.2 "0.7.2"]
                  [com.taoensso/nippy "2.2.0"]
                  [org.clojure/core.cache "0.6.3"]
-                 [boxure/netty-ring-adapter "0.4.7"]
+                 ;; Enable if using containium.systems.ring.netty
+                 ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
-                 [cc.qbits/alia "1.9.2"]]
+                 ;; Enable if using containium.systems.cassandra.alia1
+                 ;; [cc.qbits/alia "1.9.2"]
+                 ]
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
   :java-source-paths ["src-java"]
   :main containium.core
