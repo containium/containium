@@ -5,8 +5,9 @@
 (ns containium.deployer
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.modules :refer (Manager deploy! redeploy! undeploy!
-                                                       register-notifier! unregister-notifier!)]
+            [containium.modules :refer (Manager activate! deactivate!
+                                                       register-notifier! unregister-notifier!
+                                                       module-descriptor)]
             [containium.deployer.watcher :refer (mk-watchservice watch close)]
             [clojure.java.io :refer (file)])
   (:import [containium.systems Startable Stoppable]
@@ -39,10 +40,13 @@
         timeout (* 1000 60)]
     (when-not (re-matches ignore-files-re file-name)
       (let [response (case kind
-                       :create (deref (deploy! manager file-name (file dir file-name))
+                       :create (deref (activate! manager file-name
+                                                 (module-descriptor (file dir file-name)))
                                       timeout ::timeout)
-                       :modify (deref (redeploy! manager file-name) timeout ::timeout)
-                       :delete (deref (undeploy! manager file-name) timeout ::timeout))]
+                       :modify (deref (activate! manager file-name
+                                                 (module-descriptor (file dir file-name)))
+                                      timeout ::timeout)
+                       :delete (deref (deactivate! manager file-name) timeout ::timeout))]
         (if (= ::timeout response)
           (println "Response for file system deployer action for" file-name "timed out."
                    "\nThe action may have failed or may still complete.")

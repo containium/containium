@@ -31,12 +31,13 @@
 
 ;;; HTTP-Kit implementation.
 
-(defrecord RingApp [name box handler-fn ring-conf])
+(defrecord RingApp [name box handler-fn ring-conf sort-value])
 
 
 (defn- sort-apps
-  "Sort the RingApps for routing. Currently it sorts on the number of
-  path elements in the context path, descending."
+  "Sort the RingApps for routing. It uses the :sort-value of the apps,
+  in descending order. The :sort-value is assigned in `box->ring-app`
+  function."
   [apps]
   (let [non-deterministic (remove #(or (-> % :ring-conf :context-path)
                                        (-> % :ring-conf :host-regex))
@@ -46,10 +47,7 @@
                     "having a context-path nor a host-regex ("
                     (apply str (interpose ", " (map :name non-deterministic)))
                     ")."))))
-  (->> apps
-       (sort-by #(count (filter (partial = \/)
-                                (-> % :ring-conf :context-path))))
-       reverse))
+  (->> apps (sort-by #(get % :sort-value)) reverse))
 
 
 (defmacro matcher
@@ -112,10 +110,18 @@
 (defn- box->ring-app
   [name {:keys [project] :as box}]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
-        _ (assert (and ring-conf (:handler ring-conf)) (print-str ":ring system config requires a :handler, but ring-conf only contains: " ring-conf))
+        _ (assert (:handler ring-conf)
+                  (print-str ":ring app config requires a :handler, but ring-conf only "
+                             "contains: " ring-conf))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
-                                          ~(:handler ring-conf)))]
-    (RingApp. name box handler-fn ring-conf)))
+                                          ~(:handler ring-conf)))
+        ;; Sorting value is the number of slashes in the context path and the time it is
+        ;; deployed (actually, the time when this function is called). The more slashes and the
+        ;; earlier it's deployed, the higher the rank. Higher ranks are tried first for serving
+        ;; a request.
+        num-slashes (count (filter (partial = \/) (:context-path ring-conf)))
+        sort-value (long (+ (* num-slashes 1e15) (- 1e15 (System/currentTimeMillis))))]
+    (RingApp. name box handler-fn ring-conf sort-value)))
 
 
 (defrecord HttpKit [stop-fn app apps]

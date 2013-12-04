@@ -51,9 +51,10 @@
   [_ _ _]
   (println (str "Available commands are:"
                 "\n"
-                "\n module <list|deploy|undeploy|redeploy|kill> [name [path]]"
-                "\n   Prints a list of installed modules, deploys a module by name and path, or"
-                "\n   undeploys/redeploys a module by name. Paths can point to a directory or"
+                "\n module <list|describe|activate|deactivate|kill> [name [path]]"
+                "\n   Prints a list of installed modules, describes what is known of a module by"
+                "\n   name, activates (deploy/redeploy/swap) a module by name and path, or "
+                "\n   deactivates (undeploy) a module by name. Paths can point to a directory or"
                 "\n   to a JAR file. Killing a module is also possible, which forces the"
                 "\n   module to a halt, whatever its state."
                 "\n"
@@ -93,26 +94,34 @@
   (let [[action name path] args
         timeout (* 1000 60)]
     (case action
-      "list" (print-table (modules/list-installed (:modules systems)))
-      "deploy" (if (and name path)
-                 (future (println (:message (deref (modules/deploy! (:modules systems) name
-                                                                    (as-file path))
-                                                   timeout
-                                                   {:message (str "Deployment of " name
-                                                                  " timed out.")}))))
-                 (println "Missing name and/or path argument."))
-      "undeploy" (if name
-                   (future (println (:message (deref (modules/undeploy! (:modules systems) name)
-                                                     timeout
-                                                     {:message (str "Undeployment of " name
-                                                                    " timed out.")}))))
+      "list" (print-table (map #(select-keys % [:name :state])
+                               (modules/list-modules (:modules systems))))
+
+      "describe" (if name
+                   (if-let [data (first (filter #(= (:name %) name)
+                                                (modules/list-modules (:modules systems))))]
+                     (print-table (reduce (fn [s [k v]] (conj s {:key k :value v})) nil data))
+                     (println "Module" name "unknown."))
                    (println "Missing name argument."))
-      "redeploy" (if name
-                   (future (println (:message (deref (modules/redeploy! (:modules systems) name)
-                                                     timeout
-                                                     {:message (str "Redeployment of " name
-                                                                    " timed out.")}))))
-                   (println "Missing name argument."))
+
+      "activate" (if name
+                   (future
+                     (try
+                       (-> (modules/activate! (:modules systems) name
+                                              (when path (modules/module-descriptor (as-file path))))
+                           (deref timeout {:message (str "Activation of " name " timed out.")})
+                           :message
+                           println)
+                       (catch Throwable t (println "Error trying to activate" name "-"
+                                                   (.getMessage t)))))
+                 (println "Missing name argument."))
+      "deactivate" (if name
+                     (future
+                       (println (:message (deref (modules/deactivate! (:modules systems) name)
+                                                 timeout
+                                                 {:message (str "Deactivation of " name
+                                                                " timed out.")}))))
+                     (println "Missing name argument."))
       "kill" (if name
                (future (println (:message (deref (modules/kill! (:modules systems) name)
                                                  timeout
