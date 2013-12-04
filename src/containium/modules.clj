@@ -176,9 +176,9 @@
 
 (defn- activate
   [{:keys [agents] :as manager} name descriptor]
-  (let [promise (promise)]
-    (if-let [agent (get @agents name)]
-      (locking agent
+  (if-let [agent (get @agents name)]
+    (locking agent
+      (let [promise (promise)]
         (case (:state @agent)
           :undeployed (do (send-off agent assoc :state :deploying)
                           (send-off agent do-deploy manager descriptor)
@@ -199,15 +199,20 @@
                           (send-off agent do-deploy manager descriptor)
                           (send-off agent update-state manager :deployed :undeployed)
                           (send-off agent report-state manager promise)))
-          :undeploying (invalid-state @agent promise "currently undeploying")))
-      (let [agent (agent (Module. name :undeployed descriptor nil nil nil)
-                         :error-handler agent-error-handler)]
-        (send-off agent assoc :state :deploying)
-        (swap! agents #(assoc % name agent))
-        (send-off agent do-deploy manager descriptor)
-        (send-off agent update-state manager :deployed :undeployed)
-        (send-off agent report-state manager promise)))
-    promise))
+          :undeploying (invalid-state @agent promise "currently undeploying"))
+        promise))
+    (locking agents
+      (if-not (get @agents name)
+        (let [agent (agent (Module. name :undeployed descriptor nil nil nil)
+                           :error-handler agent-error-handler)
+              promise (promise)]
+          (swap! agents #(assoc % name agent))
+          (send-off agent assoc :state :deploying)
+          (send-off agent do-deploy manager descriptor)
+          (send-off agent update-state manager :deployed :undeployed)
+          (send-off agent report-state manager promise)
+          promise)
+        (activate manager name descriptor)))))
 
 
 (defn- deactivate
