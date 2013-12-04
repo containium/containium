@@ -8,7 +8,7 @@
             [containium.systems.repl :as repl]
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.cassandra.embedded12 :as cassandra]
-            [containium.systems.ring :refer (test-http-kit)]
+            [containium.systems.ring.http-kit :refer (test-http-kit)]
             [ring.middleware.session.memory :refer (memory-store)]
             [clojure.java.io :as io]))
 

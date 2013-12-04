@@ -28,6 +28,7 @@
                  ;; Enable if using containium.systems.cassandra.alia1
                  ;; [cc.qbits/alia "1.9.2"]
                  ]
+  :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
   :java-source-paths ["src-java"]
   :main containium.core
@@ -58,8 +59,20 @@
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
                   :configuration ([:sourceDirectories [:sourceDirectory "src"]]
-                                  [:temporaryOutputDirectory "false"])
-                  :executions [:execution
-                               [:id "compile-clojure"]
-                               [:phase "compile"]
-                               [:goals [:goal "compile"]]]}]])
+                                  [:temporaryOutputDirectory "false"]
+                                  [:copyDeclaredNamespaceOnly "false"]
+                                  [:compileDeclaredNamespaceOnly "false"]
+                                  [:namespaces
+                                   ;; Include the namespaces here that you want to skip compiling
+                                   ;; altogether. Start the namespaces with a bang. For example:
+                                   ;; [:namespace "!some.namespace.to.ignore"]
+                                   [:namespace "!containium.systems.ring.netty"]
+                                   [:namespace "!containium.systems.cassandra.alia1"]])
+                  :executions ([:execution
+                                [:id "compile-clojure"]
+                                [:phase "compile"]
+                                [:goals [:goal "compile"]]]
+                               [:execution
+                                [:id "test-clojure"]
+                                [:phase "test"]
+                                [:goals [:goal "test"]]])}]])
