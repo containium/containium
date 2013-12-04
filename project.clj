@@ -28,7 +28,8 @@
                  ;; Enable if using containium.systems.cassandra.alia1
                  ;; [cc.qbits/alia "1.9.2"]
                  ]
-  :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}}
+  :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
+             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
   :java-source-paths ["src-java"]
   :main containium.core
@@ -75,4 +76,5 @@
                                [:execution
                                 [:id "test-clojure"]
                                 [:phase "test"]
-                                [:goals [:goal "test"]]])}]])
+                                [:goals [:goal "test"]]])}]]
+  :pom-addition [:properties [:project.build.sourceEncoding "UTF-8"]])
