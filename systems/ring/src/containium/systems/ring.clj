@@ -52,7 +52,7 @@
 (defmacro matcher
   "Evaluates to a match form, used by the make-app function."
   [{:keys [host-regex context-path]} uri-sym server-name-sym]
-  (let [host-test `(re-matches ~host-regex ~server-name-sym)
+  (let [host-test `(re-matches ~(if host-regex (re-pattern host-regex)) ~server-name-sym)
         context-test `(and (.startsWith ~uri-sym ~context-path)
                            (= (get ~uri-sym ~(count context-path)) \/))]
     `(and ~@(remove nil? (list (when host-regex host-test)
