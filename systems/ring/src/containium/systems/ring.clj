@@ -100,9 +100,8 @@
   [ring-conf]
   (let [result ring-conf
         result (update-in result [:context-path]
-                          #(when % (if (= (last %) \/) (apply str (butlast %)) %)))
-        result (update-in result [:context-path]
-                          #(when % (if (= (first %) \/) % (str "/" %))))]
+                          (fn [path] (let [path (if (= (first path) \/) path #_else (str "/" path))
+                                           path (if (= (last path) \/) (apply str (butlast path)) #_else path)] path)))]
     result))
 
 
