@@ -91,11 +91,11 @@
     (if (.isDirectory file)
       descriptor-defaults
       ;; else if not a directory.
-      (if-let [module-map (try (edn/read-string (slurp file))
+      (if-let [module-map (try (edn/read-string {:readers *data-readers*} (slurp file))
                             (catch Throwable ex (throw (Exception. (str "Failed reading module descriptor: " file) ex))))]
         (let [file-str (str (:file module-map))
-              file (if-not (. (:file module-map) startsWith "/")
-                     (File. file file-str)
+              file (if-not (.startsWith file-str "/")
+                     (File. (.getParent file) file-str)
                      #_else (File. file-str))]
           (when-not (. file exists) (throw (IllegalArgumentException. (str file " does not exist."))))
           (merge descriptor-defaults module-map {:file file}))
