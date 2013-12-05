@@ -157,7 +157,7 @@ node.name: "Carmel"
 
 # Path to directory where to store index data allocated for this node.
 #
-path.data: /opt/elasticsearch/data
+path.data: target/elasticsearch/data
 #
 # Can optionally include more than one location, causing data to be striped across
 # the locations (a la RAID 0) on a file level, favouring locations with most free
