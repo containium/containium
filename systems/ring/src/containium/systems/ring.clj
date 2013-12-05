@@ -78,7 +78,7 @@
                   (let [sorted (vec (sort-apps apps))
                         fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
-                                         ~'host (-> ~'request headers (get "host"))]
+                                         ~'host (-> ~'request :headers (get "host"))]
                                      (or ~@(for [index (range (count sorted))
                                                  :let [app (get sorted index)]]
                                              `(when (matcher ~(:ring-conf app) ~'uri ~'host)
