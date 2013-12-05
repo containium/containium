@@ -132,11 +132,13 @@
                            (assoc % :state :undeployed))))))
 
 
+(declare handle-redeploy)
+
 (defn- handle-deploy
   [{:keys [name state] :as module} manager file promise]
   (case state
     :deploying (invalid-state module promise "already deploying.")
-    :deployed (invalid-state module promise "already deployed.")
+    :deployed (handle-redeploy module manager promise)
     :redeploying (invalid-state module promise "currently redeploying.")
     :swapping (invalid-state module promise "currently swapping.")
     :undeploying (invalid-state module promise "currently undeploying.")
