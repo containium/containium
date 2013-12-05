@@ -51,8 +51,8 @@
 
 (defmacro matcher
   "Evaluates to a match form, used by the make-app function."
-  [{:keys [host-regex context-path]} uri-sym server-name-sym]
-  (let [host-test `(re-matches ~host-regex ~server-name-sym)
+  [{:keys [host-regex context-path]} uri-sym host-sym]
+  (let [host-test `(re-matches ~(if host-regex (re-pattern host-regex)) ~host-sym)
         context-test `(and (.startsWith ~uri-sym ~context-path)
                            (= (get ~uri-sym ~(count context-path)) \/))]
     `(and ~@(remove nil? (list (when host-regex host-test)
@@ -78,10 +78,10 @@
                   (let [sorted (vec (sort-apps apps))
                         fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
-                                         ~'server-name (:server-name ~'request)]
+                                         ~'host (-> ~'request :headers (get "host"))]
                                      (or ~@(for [index (range (count sorted))
                                                  :let [app (get sorted index)]]
-                                             `(when (matcher ~(:ring-conf app) ~'uri ~'server-name)
+                                             `(when (matcher ~(:ring-conf app) ~'uri ~'host)
                                                 (let [~'app (get ~'sorted ~index)]
                                                   (boxure/call-in-box
                                                    (:box ~'app)
@@ -100,9 +100,8 @@
   [ring-conf]
   (let [result ring-conf
         result (update-in result [:context-path]
-                          #(when % (if (= (last %) \/) (apply str (butlast %)) %)))
-        result (update-in result [:context-path]
-                          #(when % (if (= (first %) \/) % (str "/" %))))]
+                          (fn [path] (let [path (if (= (first path) \/) path #_else (str "/" path))
+                                           path (if (= (last path) \/) (apply str (butlast path)) #_else path)] path)))]
     result))
 
 
