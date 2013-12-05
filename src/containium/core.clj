@@ -15,7 +15,6 @@
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
-            [containium.literals]
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]

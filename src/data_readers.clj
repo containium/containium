@@ -1,1 +1,1 @@
-{containium/regex containium.literals/regex}
+{re clojure.core/re-pattern}
