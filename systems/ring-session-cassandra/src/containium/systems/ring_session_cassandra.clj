@@ -9,7 +9,8 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.cassandra :refer (Cassandra prepare do-prepared
                                                            has-keyspace? write-schema
-                                                           bytebuffer->bytes)]
+                                                           bytebuffer->bytes
+                                                           bytes->bytebuffer)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.core.cache :refer (ttl-cache-factory)]
@@ -35,7 +36,8 @@
 
 (defn- write-session-data
   [cassandra write-query key data]
-  (do-prepared cassandra write-query {:consistency session-consistency} [(freeze data) key]))
+  (do-prepared cassandra write-query {:consistency session-consistency}
+               [(bytes->bytebuffer (freeze data)) key]))
 
 
 (defn- remove-session-data
