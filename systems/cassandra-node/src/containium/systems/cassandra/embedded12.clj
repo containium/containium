@@ -71,6 +71,10 @@
   (encode-value [value] "Encodes a value to a Cassandra encoded ByteBuffer."))
 
 (extend-protocol Encode
+  (Class/forName "[B")
+  (abstract-type [value] BytesType/instance)
+  (encode-value [value] (ByteBuffer/wrap value))
+
   BigDecimal
   (abstract-type [value] DecimalType/instance)
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
