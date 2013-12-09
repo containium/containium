@@ -10,7 +10,10 @@
             [containium.modules.boxes :refer (start-box stop-box)]
             [clojure.edn :as edn])
   (:import [containium.systems Startable Stoppable]
-           [java.io File]))
+           [java.io File]
+           [java.net URL]
+           [java.util Collections Map$Entry]
+           [java.util.jar Manifest]))
 
 
 ;;; Public system definitions.
@@ -18,37 +21,43 @@
 (defprotocol Manager
   (list-installed [this]
     "Returns a sequence of maps with :name and :state entries for the
-  currently installed modules.")
+    currently installed modules.")
 
   (deploy! [this name file]
     "Try to deploy the file under the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+    returned, which will eventually hold a Response record.")
 
   (undeploy! [this name]
     "Try to undeploy the module with the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+    returned, which will eventually hold a Response record.")
 
   (redeploy! [this name]
     "Try to redeploy the module with the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+    returned, which will eventually hold a Response record.")
 
   (kill! [this name]
     "Kills a module, whatever it's state.")
 
   (register-notifier! [this name f]
     "Register a notifier function by name, which is called on events
-  happening regarding the modules. The function takes two arguments. The
-  first is the kind of event, and the second is a sequence of extra data
-  for that event. The following events are send:
+    happening regarding the modules. The function takes two arguments. The
+    first is the kind of event, and the second is a sequence of extra data
+    for that event. The following events are send:
 
-  kind         | data
-  ------------------------------------------
-  :deployed    | [module-name file]
-  :failed      | [module-name]
-  :undeployed  | [module-name]")
+    kind         | data
+    ------------------------------------------
+    :deployed    | [module-name file]
+    :failed      | [module-name]
+    :undeployed  | [module-name]")
 
   (unregister-notifier! [this name]
-    "Remove a notifier by name."))
+    "Remove a notifier by name.")
+
+  (versions [this name]
+    "Prints the *-Version MANIFEST entries it can find in the classpath
+    of the module. The following keys are filtered out:
+    Manifest-Version Implementation-Version Ant-Version
+    Specification-Version Archiver-Version Bundle-Version"))
 
 
 (defrecord Response [success message])
@@ -88,16 +97,18 @@
   [^File file]
   (assert file "Path to module, or module descriptor File required!")
   (let [descriptor-defaults {:file file, :profiles [:default]}]
+    (assert (.exists file) (str file " does not exist."))
     (if (.isDirectory file)
       descriptor-defaults
       ;; else if not a directory.
-      (if-let [module-map (try (edn/read-string {:readers *data-readers*} (slurp file))
-                            (catch Throwable ex (throw (Exception. (str "Failed reading module descriptor: " file) ex))))]
+      (if-let [module-map (try (let [data (edn/read-string {:readers *data-readers*} (slurp file))]
+                                 (when (map? data) data))
+                               (catch Throwable ex))]
         (let [file-str (str (:file module-map))
               file (if-not (.startsWith file-str "/")
                      (File. (.getParent file) file-str)
-                     #_else (File. file-str))]
-          (when-not (. file exists) (throw (IllegalArgumentException. (str file " does not exist."))))
+                     (File. file-str))]
+          (assert (.exists file) (str file " does not exist."))
           (merge descriptor-defaults module-map {:file file}))
         ;; else if not a module descriptor file.
         descriptor-defaults))))
@@ -215,6 +226,27 @@
   (.printStackTrace exception))
 
 
+(defn- versions*
+  [module]
+  (if-let [^ClassLoader box-cl (-> module :box :box-cl)]
+    (doseq [^URL resource (Collections/list (.getResources box-cl "META-INF/MANIFEST.MF"))]
+      (with-open [stream (.openStream resource)]
+        (let [mf (Manifest. stream)
+              version-entries (filter (fn [^Map$Entry e]
+                                        (let [name (.. e getKey toString)]
+                                          (and (.endsWith name "-Version")
+                                               (not (#{"Manifest-Version"
+                                                       "Implementation-Version"
+                                                       "Ant-Version"
+                                                       "Specification-Version"
+                                                       "Archiver-Version"
+                                                       "Bundle-Version"} name)))))
+                                      (.entrySet (.getMainAttributes mf)))]
+          (doseq [^Map$Entry entry version-entries]
+            (println (.. entry getKey toString) ":" (.getValue entry))))))
+    (println "Module" (:name module) "not running.")))
+
+
 (defrecord DefaultManager [config systems agents notifiers]
   Manager
   (list-installed [_]
@@ -262,6 +294,11 @@
 
   (unregister-notifier! [_ name]
     (swap! notifiers dissoc name))
+
+  (versions [_ name]
+    (if-let [agent (@agents name)]
+      (versions* @agent)
+      (println "No module named" name "known.")))
 
   Stoppable
   (stop [this]
