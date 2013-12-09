@@ -162,14 +162,16 @@
 
 (defn shutdown-timer
   "Start a timer that shows debug information, iff the JVM has not
-  shutdown yet and `wait` seconds have passed."
-  [wait]
+  shutdown yet and `wait` seconds have passed. If the `kill?` argument
+  is set to true, containium will be force-terminated as well."
+  [wait kill?]
   (let [timer (Timer. "shutdown-timer" true)
         task (proxy [TimerTask] []
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
-                                   (interpose "\n  " threads))))))]
+                                   (interpose "\n  " threads))))
+                 (when kill? (System/exit 1))))]
     (.schedule timer task (int (* wait 1000)))))
 
 ;;; Daemon control
@@ -222,4 +224,4 @@
     ((if daemon? run-daemon #_else run) systems))
   (println "Shutting down...")
   (shutdown-agents)
-  (shutdown-timer 10))
+  (shutdown-timer 15 daemon?))
