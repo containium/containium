@@ -76,5 +76,16 @@
                                [:execution
                                 [:id "test-clojure"]
                                 [:phase "test"]
-                                [:goals [:goal "test"]]])}]]
+                                [:goals [:goal "test"]]])}]
+
+                [org.codehaus.mojo/buildnumber-maven-plugin "1.2"
+                 {:executions [:execution [:phase "validate"] [:goals [:goal "create"]]]
+                  :configuration ([:doCheck "false"] ; Set to true to prevent packaging with local changes.
+                                  [:doUpdate "false"]
+                                  [:shortRevisionLength "8"])}]
+
+                [org.apache.maven.plugins/maven-jar-plugin "2.1"
+                 {:configuration [:archive
+                                  [:manifest [:addDefaultImplementationEntries "true"]]
+                                  [:manifestEntries [:Containium-Version "${buildNumber}"]]]}]]
   :pom-addition [:properties [:project.build.sourceEncoding "UTF-8"]])
