@@ -158,6 +158,14 @@
               (recur)))))))
 
 
+(defmacro command [cmd & args]
+  "Call console commands from the REPL. For example:
+  (command module versions foo)."
+  (let [cmd (str cmd)
+        args (mapv str args)]
+    `(print (with-out-str (handle-command ~cmd ~args systems)))))
+
+
 ;;; Thread debug on shutdown.
 
 (defn shutdown-timer
