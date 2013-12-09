@@ -52,11 +52,12 @@
   [_ _ _]
   (println (str "Available commands are:"
                 "\n"
-                "\n module <list|deploy|undeploy|redeploy|kill> [name [path]]"
+                "\n module <list|deploy|undeploy|redeploy|kill|versions> [name [path]]"
                 "\n   Prints a list of installed modules, deploys a module by name and path, or"
                 "\n   undeploys/redeploys a module by name. Paths can point to a directory or"
                 "\n   to a JAR file. Killing a module is also possible, which forces the"
-                "\n   module to a halt, whatever its state."
+                "\n   module to a halt, whatever its state. The versions actions shows the"
+                "\n   *-Version MANIFEST data in the classpath of the module."
                 "\n"
                 "\n repl <start|stop> [port]"
                 "\n   Starts an nREPL at the specified port, or stops the current one, inside"
@@ -95,6 +96,7 @@
         timeout (* 1000 60)]
     (case action
       "list" (print-table (modules/list-installed (:modules systems)))
+
       "deploy" (if (and name path)
                  (future (println (:message (deref (modules/deploy! (:modules systems) name
                                                                     (as-file path))
@@ -102,28 +104,35 @@
                                                    {:message (str "Deployment of " name
                                                                   " timed out.")}))))
                  (println "Missing name and/or path argument."))
+
       "undeploy" (if name
                    (future (println (:message (deref (modules/undeploy! (:modules systems) name)
                                                      timeout
                                                      {:message (str "Undeployment of " name
                                                                     " timed out.")}))))
                    (println "Missing name argument."))
+
       "redeploy" (if name
                    (future (println (:message (deref (modules/redeploy! (:modules systems) name)
                                                      timeout
                                                      {:message (str "Redeployment of " name
                                                                     " timed out.")}))))
                    (println "Missing name argument."))
+
       "kill" (if name
                (future (println (:message (deref (modules/kill! (:modules systems) name)
                                                  timeout
                                                  {:message (str "Killing of " name
                                                                 " timed out.")}))))
                (println "Missing name argument."))
+
+      "versions" (if name
+                   (modules/versions (:modules systems) name)
+                   (println "Missing name argument"))
+
       (if action
         (println (str "Unknown action '" action "', see help."))
         (println "Missing action argument, see help.")))))
-
 
 
 (defn command-loop
@@ -153,14 +162,16 @@
 
 (defn shutdown-timer
   "Start a timer that shows debug information, iff the JVM has not
-  shutdown yet and `wait` seconds have passed."
-  [wait]
+  shutdown yet and `wait` seconds have passed. If the `kill?` argument
+  is set to true, containium will be force-terminated as well."
+  [wait kill?]
   (let [timer (Timer. "shutdown-timer" true)
         task (proxy [TimerTask] []
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
-                                   (interpose "\n  " threads))))))]
+                                   (interpose "\n  " threads))))
+                 (when kill? (System/exit 1))))]
     (.schedule timer task (int (* wait 1000)))))
 
 ;;; Daemon control
@@ -213,4 +224,4 @@
     ((if daemon? run-daemon #_else run) systems))
   (println "Shutting down...")
   (shutdown-agents)
-  (shutdown-timer 10))
+  (shutdown-timer 15 daemon?))
