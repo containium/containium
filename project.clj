@@ -14,7 +14,7 @@
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
                  [http-kit "2.1.10"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
-                 [org.apache.cassandra/cassandra-all "1.2.10" :exclusions [javax.servlet/servlet-api]]
+                 [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
                  [io.netty/netty "3.7.0.Final"]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
