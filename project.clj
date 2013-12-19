@@ -20,7 +20,7 @@
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [kafka/core-kafka_2.9.2 "0.7.2"]
-                 [com.taoensso/nippy "2.2.0"]
+                 [com.taoensso/nippy "2.5.2"]
                  [org.clojure/core.cache "0.6.3"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
