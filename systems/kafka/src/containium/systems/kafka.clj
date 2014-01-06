@@ -7,15 +7,13 @@
             [containium.systems.config :refer (get-config Config)])
   (:import  [containium.systems Startable Stoppable]
             [kafka.server KafkaConfig KafkaServer]
-            [kafka.javaapi.producer Producer ProducerData]
-            [kafka.producer ProducerConfig]
             [java.util Properties]))
 
 
 ;;; The public API of the Kafka system.
 
 (defprotocol Kafka
-  (send-message [this topic message]))
+  (get-server [this]))
 
 
 ;;; The embedded implementation.
@@ -32,18 +30,13 @@
      properties))
 
 
-(defrecord EmbeddedKafka [^KafkaServer server ^Producer producer]
+(defrecord EmbeddedKafka [^KafkaServer server]
   Kafka
-  (send-message [_ topic message]
-    ; TODO: Implement forwarding Encoder for send-message
-    ;        or librarylize prime.utils.msgpack.KafkaVOSerializer
-    ; Producer runs as root system, so it can't find and instantiate the serializer class loaded in the app...
-    (.send producer (ProducerData. ^String topic message)))
+  (get-server [_] server)
 
   Stoppable
   (stop [_]
     (println "Stopping embedded Kafka...")
-    (.close producer)
     (.shutdown server)
     (println "Waiting for embedded Kafka to be fully stopped.")
     (.awaitShutdown server)
@@ -56,8 +49,6 @@
       (let [config (get-config (require-system Config systems) :kafka)
             _ (println "Starting embedded Kafka using config:" config)
             server-properties (map->properties (:server config))
-            server (doto (KafkaServer. (KafkaConfig. server-properties)) .startup)
-            producer-properties (map->properties (:producer config))
-            producer (Producer. (ProducerConfig. producer-properties))]
+            server (doto (KafkaServer. (KafkaConfig. server-properties) (kafka.utils.SystemTime$/MODULE$)) .startup)]
         (println "Embedded Kafka started.")
-        (EmbeddedKafka. server producer)))))
+        (EmbeddedKafka. server)))))

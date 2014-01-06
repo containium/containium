@@ -19,7 +19,7 @@
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
-                 [kafka/core-kafka_2.9.2 "0.7.2"]
+                 [org.apache.kafka/kafka_2.9.2 "0.8.0"]
                  [com.taoensso/nippy "2.5.2"]
                  [org.clojure/core.cache "0.6.3"]
                  ;; Enable if using containium.systems.ring.netty

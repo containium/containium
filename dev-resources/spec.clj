@@ -18,12 +18,9 @@
         :port 9042}
  :session-store {:ttl 1}
  :kafka {:server {:port 9090
-                  :brokerid 1
+                  :broker.id 1
                   :log.dir "target/kafka-log"
-                  :enable.zookeeper false}
-         :producer {:broker.list "1:localhost:9090"
-                    ;; :serializer.class "nl.storm.MessagePackVOSerializer"
-                    }}
+                  :zookeeper.connect "localhost"}}
  :elastic {}
  :modules {:resolve-dependencies true
            :isolates ["containium.*"
