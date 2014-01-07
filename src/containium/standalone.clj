@@ -27,7 +27,6 @@
                 {:file (io/as-file ".")
                  :profiles []
                  :active-profiles []
-                 :dev? true
                  :containium containium-map})
       (read-line)
       (stop-fn systems)))
