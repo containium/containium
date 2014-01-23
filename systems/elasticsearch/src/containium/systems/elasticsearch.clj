@@ -12,14 +12,15 @@
 ;;; The public API for Elastic systems.
 
 (defprotocol Elastic
-  (whut? [this])) ;;--- FIXME: What would be a good API for Elastic?
+  (node [this]
+    "Returns the Node object used connecting.")) ;;---TODO: Is this a good API?
 
 
 ;;; The embedded implementation.
 
 (defrecord EmbeddedElastic [^ Node node]
   Elastic
-  (whut? [_])
+  (node [_] node)
 
   Stoppable
   (stop [_]
