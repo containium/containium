@@ -4,8 +4,7 @@
 
 (ns containium.utils.session-store
   (:require [ring.middleware.session.store :refer (SessionStore) :as session]
-            [taoensso.nippy :as nippy]
-            [containium.systems :refer (protocol-forwarder)]))
+            [taoensso.nippy :as nippy]))
 
 
 (defrecord SerializingSessionStore [session-store serialize deserialize]
@@ -25,6 +24,4 @@
   ([session-store {:keys [serializer deserializer]
                                  :or {serializer nippy/freeze deserializer nippy/thaw}
                                  :as options}]
-     (SerializingSessionStore. ((protocol-forwarder SessionStore) session-store)
-                               (or serializer identity)
-                               (or deserializer identity))))
+     (SerializingSessionStore. session-store (or serializer identity) (or deserializer identity))))
