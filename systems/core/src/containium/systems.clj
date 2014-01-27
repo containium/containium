@@ -86,7 +86,7 @@
   class already implements or satisfies the protocol, this is a noop."
   [object-or-class protocol]
   (assert object-or-class "object or class cannot be nil")
-  (assert (#'clojure.core/protocol? protocol "protocol argument must point to a protocol"))
+  (assert (#'clojure.core/protocol? protocol) "protocol argument must point to a protocol")
   (let [class (if (class? object-or-class) object-or-class (class object-or-class))]
     (try
       (extend class protocol
