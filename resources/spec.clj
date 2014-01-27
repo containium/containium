@@ -34,7 +34,6 @@
                       "cemerick.pomegranate.*"
                       "bultitude.core*"
                       "dynapath.*"
-                      "pedantic.*"
                       ;; Alia system deps
                       "qbits.*"
                       "clj.time.*"
