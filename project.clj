@@ -25,9 +25,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
-                 ;; Enable if using containium.systems.cassandra.alia1
-                 ;; [cc.qbits/alia "1.9.2"]
-                 ]
+                 [cc.qbits/alia "1.9.2"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
@@ -67,8 +65,7 @@
                                    ;; Include the namespaces here that you want to skip compiling
                                    ;; altogether. Start the namespaces with a bang. For example:
                                    ;; [:namespace "!some.namespace.to.ignore"]
-                                   [:namespace "!containium.systems.ring.netty"]
-                                   [:namespace "!containium.systems.cassandra.alia1"]])
+                                   [:namespace "!containium.systems.ring.netty"]])
                   :executions ([:execution
                                 [:id "compile-clojure"]
                                 [:phase "compile"]
