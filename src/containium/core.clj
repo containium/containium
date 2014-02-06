@@ -15,6 +15,7 @@
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
+            [containium.exceptions :as ex]
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]
@@ -153,6 +154,7 @@
           (do (try
                 (handle-command command args systems)
                 (catch Throwable t
+                  (ex/exit-when-fatal t)
                   (println "Error handling command" command ":")
                   (.printStackTrace t)))
               (recur)))))))
@@ -218,6 +220,7 @@
   When run with no arguments: interactive console is started.
   Any other argument will activate daemon mode."
   [& [daemon? args]]
+  (ex/register-default-handler)
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                          :cassandra cassandra/embedded12
                          :elastic elastic/embedded

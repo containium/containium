@@ -4,7 +4,8 @@
 
 (ns containium.modules
   "Functions for managing the starting and stopping of modules."
-  (:require [containium.systems :refer (require-system)]
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)]
@@ -103,7 +104,7 @@
       ;; else if not a directory.
       (if-let [module-map (try (let [data (edn/read-string {:readers *data-readers*} (slurp file))]
                                  (when (map? data) data))
-                               (catch Throwable ex))]
+                               (catch Throwable ex (ex/exit-when-fatal ex)))]
         (let [file-str (str (:file module-map))
               file (if-not (.startsWith file-str "/")
                      (File. (.getParent file) file-str)
@@ -134,6 +135,7 @@
         ;; else if box failed to start.
         (throw (Exception. (str "Box " name " failed to start.")))))
     (catch Throwable ex
+      (ex/exit-when-fatal ex)
       (println ex)
       (.printStackTrace ex)
       (send-to-module manager name

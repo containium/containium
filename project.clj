@@ -39,6 +39,7 @@
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              "-Xmx500m" ; max heap size.
+             "-XX:OnOutOfMemoryError=./killpid.sh %p"
              ]
   :repl-options {:port 13337}
   :global-vars {*warn-on-reflection* true}

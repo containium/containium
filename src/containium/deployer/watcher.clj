@@ -4,6 +4,7 @@
 
 (ns containium.deployer.watcher
   "A simple filesystem watcher."
+  (:require [containium.exceptions :as ex])
   (:import [java.nio.file FileSystems StandardWatchEventKinds WatchService WatchKey WatchEvent
             ClosedWatchServiceException]
            [java.io File]
@@ -87,6 +88,7 @@
                        (catch ClosedWatchServiceException cwse
                          (println "Stopping filesystem watcher."))
                        (catch Throwable e
+                         (ex/exit-when-fatal e)
                          (println "Exception while polling for file system events:" e)
                          (println "Stopping watching. Maybe improve this.")))
                    (recur)

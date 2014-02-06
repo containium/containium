@@ -4,7 +4,8 @@
 
 (ns containium.modules.boxes
   "Logic for starting and stopping boxes."
-  (:require [boxure.core :refer (boxure) :as boxure]
+  (:require [containium.exceptions :as ex]
+            [boxure.core :refer (boxure) :as boxure]
             [leiningen.core.project]))
 
 (def meta-merge #'leiningen.core.project/meta-merge)
@@ -64,9 +65,11 @@
               (println "Module" name "started.")
               (assoc box :start-result start-result, :descriptor descriptor))
             (catch Throwable ex
+              (ex/exit-when-fatal ex)
               (boxure/clean-and-stop box)
               (throw ex))))))
     (catch Throwable ex
+      (ex/exit-when-fatal ex)
       (println "Exception while starting module" name ":" ex)
       (.printStackTrace ex))))
 
@@ -82,6 +85,7 @@
         (boxure/call-in-box box stop-fn (:start-result box))
         :stopped)
       (catch Throwable ex
+        (ex/exit-when-fatal ex)
         (println "Exception while stopping module" name ":" ex)
         (.printStackTrace ex))
       (finally

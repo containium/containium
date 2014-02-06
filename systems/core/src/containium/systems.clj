@@ -4,6 +4,7 @@
 
 (ns containium.systems
   "Logic for starting and stopping systems."
+  (:require [containium.exceptions :as ex])
   (:import [clojure.lang Compiler]))
 
 
@@ -34,14 +35,17 @@
            (try
              (stop system#)
              (catch Throwable ex#
+               (ex/exit-when-fatal ex#)
                (println "Exception while stopping system component" ~name "-" ex#)
                (.printStackTrace ex#)))))
        (catch Throwable ex#
+         (ex/exit-when-fatal ex#)
          (println "Exception while starting system component" ~name "-" ex#)
          (.printStackTrace ex#)))
     `(try
       ~@body
       (catch Throwable ex#
+        (ex/exit-when-fatal ex#)
         (println "Exception while running `with-systems` body. Stopping systems.")
         (.printStackTrace ex#)))))
 

@@ -3,7 +3,8 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.deployer
-  (:require [containium.systems :refer (require-system)]
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [containium.modules :refer (Manager deploy! redeploy! undeploy!
                                                        register-notifier! unregister-notifier!)]
@@ -58,6 +59,7 @@
         (future (try
                   (handle-event manager dir :create (.getAbsoluteFile file))
                   (catch Throwable ex
+                    (ex/exit-when-fatal ex)
                     (println "handle-event :create failed")
                     (.printStackTrace ex)))))))
 

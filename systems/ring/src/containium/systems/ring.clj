@@ -5,7 +5,8 @@
 (ns containium.systems.ring
   "The interface definition of the Ring system. The Ring system offers
   an API to a ring server."
-  (:require [containium.systems :refer (Startable)]
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (Startable)]
             [boxure.core :as boxure]))
 
 
@@ -65,6 +66,7 @@
     (try
       (handler request)
       (catch Throwable t
+        (ex/exit-when-fatal t)
         (println "Error handling request:" request)
         (.printStackTrace t)
         {:status 500 :body "Internal error."}))))
