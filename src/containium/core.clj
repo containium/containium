@@ -116,27 +116,15 @@
                    (println "Missing name argument."))
 
       "activate" (if name
-                   (future (try
-                             (modules/activate! (:modules systems) name
-                                                (when path (modules/module-descriptor (as-file path)))
-                                                (console-channel name))
-                             (catch Exception ex
-                               (.printStackTrace ex)
-                               (println "Failed to activate:" ex))))
-                 (println "Missing name argument."))
+                   (modules/activate! (:modules systems) name
+                                      (when path (modules/module-descriptor (as-file path)))
+                                      (console-channel name))
+                   (println "Missing name argument."))
       "deactivate" (if name
-                     (future (try
-                               (modules/deactivate! (:modules systems) name (console-channel name))
-                               (catch Exception ex
-                                 (.printStackTrace ex)
-                                 (println "Failed to deactivate:" ex))))
+                     (modules/deactivate! (:modules systems) name (console-channel name))
                      (println "Missing name argument."))
       "kill" (if name
-               (future (try
-                         (modules/kill! (:modules systems) name (console-channel name))
-                         (catch Exception ex
-                           (.printStackTrace ex)
-                           (println "Failed to kill:" ex))))
+               (modules/kill! (:modules systems) name (console-channel name))
                (println "Missing name argument."))
       (if action
         (println (str "Unknown action '" action "', see help."))
