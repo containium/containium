@@ -5,7 +5,8 @@
 (ns containium.modules.boxes
   "Logic for starting and stopping boxes."
   (:require [boxure.core :refer (boxure) :as boxure]
-            [leiningen.core.project]))
+            [leiningen.core.project]
+            [clojure.core.async :as async]))
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -34,12 +35,12 @@
 
 (defn start-box
   "The logic for starting a box. Returns the started box."
-  [{:keys [name file] :as descriptor} boxure-config systems]
-  (println "Starting module" name "using file" file "...")
+  [{:keys [name file] :as descriptor} boxure-config systems log-fn]
+  (log-fn "Starting module" name "using file" file "...")
   (try
     (let [project (boxure/file-project file (:profiles descriptor))]
       (if-let [errors (seq (check-project project))]
-        (apply println "Could not start module" name "for the following reasons:\n  "
+        (apply log-fn "Could not start module" name "for the following reasons:\n  "
                (interpose "\n  " errors))
         (let [module-config (meta-merge (:containium project) (:containium descriptor))
               boxure-config (if-let [module-isolates (:isolates module-config)]
@@ -57,20 +58,20 @@
                 (throw start-fn))
             (try
               (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
-                (println "Module" name "started.")
+                (log-fn "Module" name "started.")
                 (assoc box :start-result start-result, :descriptor descriptor))
               (catch Throwable ex
                 (boxure/clean-and-stop box)
                 (throw ex)))))))
     (catch Throwable ex
-      (println "Exception while starting module" name ":" ex)
+      (log-fn "Exception while starting module" name ":" ex)
       (.printStackTrace ex))))
 
 
 (defn stop-box
-  [name box]
+  [name box log-fn]
   (let [module-config (-> box :project :containium)]
-    (println "Stopping module" name "...")
+    (log-fn "Stopping module" name "...")
     (try
       (let [stop-fn @(boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
@@ -78,8 +79,8 @@
         (boxure/call-in-box box stop-fn (:start-result box))
         :stopped)
       (catch Throwable ex
-        (println "Exception while stopping module" name ":" ex)
+        (log-fn "Exception while stopping module" name ":" ex)
         (.printStackTrace ex))
       (finally
         (boxure/clean-and-stop box)
-        (println "Module" name "stopped.")))))
+        (log-fn "Module" name "stopped.")))))

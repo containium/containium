@@ -15,7 +15,7 @@
 ;;; Public interface
 
 (defprotocol Ring
-  (upstart-box [this name box]
+  (upstart-box [this name box log-fn]
     "Add a box holding a ring application. The box's project definition
   needs to have a :ring configuration inside the :containium
   configuration. A required key is :handler, which, when evaluated
@@ -25,7 +25,7 @@
   The second is a regular expression, which is matched against the
   server name of the request, for example \".*containium.com\".")
 
-  (remove-box [this box]
+  (remove-box [this box log-fn]
     "Removes a box's ring handler from the ring server."))
 
 
@@ -38,12 +38,12 @@
   "Sort the RingApps for routing. It uses the :sort-value of the apps,
   in descending order. The :sort-value is assigned in `box->ring-app`
   function."
-  [apps]
+  [apps log-fn]
   (let [non-deterministic (remove #(or (-> % :ring-conf :context-path)
                                        (-> % :ring-conf :host-regex))
                                   apps)]
     (when (< 1 (count non-deterministic))
-      (println (str "Warning: multiple web apps registered not "
+      (log-fn (str "Warning: multiple web apps registered not "
                     "having a context-path nor a host-regex ("
                     (apply str (interpose ", " (map :name non-deterministic)))
                     ")."))))
@@ -74,9 +74,9 @@
 (defn- make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
-  [apps]
+  [log-fn apps]
   (let [handler (if-let [apps (seq (vals apps))]
-                  (let [sorted (vec (sort-apps apps))
+                  (let [sorted (vec (sort-apps apps log-fn))
                         fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
                                          ~'server-name (:server-name ~'request)]
@@ -108,11 +108,11 @@
 
 
 (defn- box->ring-app
-  [name {:keys [project] :as box}]
+  [name {:keys [project] :as box} log-fn]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         _ (assert (:handler ring-conf)
-                  (print-str ":ring app config requires a :handler, but ring-conf only "
-                             "contains: " ring-conf))
+                  (log-fn ":ring app config requires a :handler, but ring-conf only contains: "
+                          ring-conf))
         handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))
         ;; Sorting value is the number of slashes in the context path and the time it is
@@ -126,14 +126,14 @@
 
 (defrecord HttpKit [stop-fn app apps]
   Ring
-  (upstart-box [_ name box]
-    (->> (box->ring-app name box)
+  (upstart-box [_ name box log-fn]
+    (->> (box->ring-app name box log-fn)
          (swap! apps assoc name)
-         (make-app)
+         (make-app log-fn)
          (reset! app)))
-  (remove-box [_ name]
+  (remove-box [_ name log-fn]
     (->> (swap! apps dissoc name)
-         (make-app)
+         (make-app log-fn)
          (reset! app)))
 
   Stoppable
@@ -144,7 +144,7 @@
   (reify Startable
     (start [_ systems]
       (let [config (require-system Config systems)
-            app (atom (make-app {}))
+            app (atom (make-app println {}))
             app-fn (fn [request] (@app request))
             stop-fn (run-server app-fn (get-config config :http-kit))]
         (HttpKit. stop-fn app (atom {}))))))
@@ -154,9 +154,9 @@
 
 (defrecord TestHttpKit [stop-fn]
   Ring
-  (upstart-box [_ _ _]
+  (upstart-box [_ _ _ _]
     (Exception. "Cannot be used on a test HTTP-Kit implementation."))
-  (remove-box [_ _]
+  (remove-box [_ _ _]
     (Exception. "Cannot be used on a test HTTP-Kit implementation."))
 
   Stoppable
