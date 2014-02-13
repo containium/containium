@@ -10,7 +10,8 @@
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
             [containium.systems.ring-session-cassandra :as cass-session]
-            ;; [containium.deployer :as deployer]
+            [containium.deployer :as deployer]
+            [containium.deployer.socket :as socket]
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
@@ -212,6 +213,7 @@
                          :session-store cass-session/embedded
                          :modules modules/default-manager
                          ;; :fs deployer/directory
+                         :socket socket/socket
                          :repl repl/nrepl]
     ((if daemon? run-daemon #_else run) systems))
   (println "Shutting down...")

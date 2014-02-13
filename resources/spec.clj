@@ -21,4 +21,5 @@
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
                       "ring.*"]}
- :fs {:deployments "deployments"}}
+ :fs {:deployments "deployments"}
+ :socket {:port 9999}}

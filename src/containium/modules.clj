@@ -79,18 +79,18 @@
 (defrecord Module [name status descriptor box ring-name error])
 
 
+(defn- agent-error-handler
+  [agent ^Exception exception]
+  (println "Exception in module agent:")
+  (.printStackTrace exception))
+
+
 (defn- new-agent
   [{:keys [agents] :as manager} name]
   (let [agent (agent (Module. name :undeployed nil nil nil false)
                      :error-handler agent-error-handler)]
     (swap! agents assoc name agent)
     agent))
-
-
-(defn- agent-error-handler
-  [agent ^Exception exception]
-  (println "Exception in module agent:")
-  (.printStackTrace exception))
 
 
 (defn- channel-logger
