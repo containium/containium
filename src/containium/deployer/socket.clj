@@ -11,7 +11,8 @@
             [clojure.java.io :refer (as-file)]
             [clojure.core.async :as async :refer (<! >!)])
   (:import [org.jboss.netty.channel SimpleChannelHandler ChannelHandlerContext MessageEvent Channel
-            ChannelFutureListener ChannelFactory]
+            ChannelFutureListener ChannelFactory ChannelFuture ChannelStateEvent]
+           [org.jboss.netty.channel.group ChannelGroup DefaultChannelGroup]
            [org.jboss.netty.channel.socket.nio NioServerSocketChannelFactory]
            [org.jboss.netty.bootstrap ServerBootstrap]
            [org.jboss.netty.handler.codec.string StringDecoder StringEncoder]
@@ -40,9 +41,10 @@
                   (write nettyc msg)
                   (catch Exception ex
                     (async/close! commc)
-                    (println "Failed to write" msg "to netty channel:" (.getMessage ex)))))
+                    (println "Failed to write" msg "to netty channel:"
+                             (.getMessage ^Exception ex)))))
          (if fut
-           (.addListener fut ChannelFutureListener/CLOSE)
+           (.addListener ^ChannelFuture fut ChannelFutureListener/CLOSE)
            (.close nettyc))))
      commc))
 
@@ -58,8 +60,11 @@
 
 
 (defn handler
-  [manager]
+  [manager ^ChannelGroup channels]
   (proxy [SimpleChannelHandler] []
+    (channelOpen [^ChannelHandlerContext ctx ^ChannelStateEvent evt]
+      (.add channels (.getChannel evt)))
+
     (messageReceived [^ChannelHandlerContext ctx ^MessageEvent evt]
       (let [^String msg (.getMessage evt)
             [command & args] (map (fn [[normal quoted]] (or quoted normal))
@@ -70,21 +75,24 @@
             "activate"
             (let [[name path] args]
               (if name
-                (modules/activate! manager name
-                                   (when path (modules/module-descriptor (as-file path)))
-                                   commc)
+                (do (println "Received activate action from socket deployer for module" name)
+                    (modules/activate! manager name
+                                       (when path (modules/module-descriptor (as-file path)))
+                                       commc))
                 (close-with-error commc "Missing name argument." nil)))
 
             "deactivate"
             (let [[name] args]
               (if name
-                (modules/deactivate! manager name commc)
+                (do (println "Received deactivate action from socket deployer for module" name)
+                    (modules/deactivate! manager name commc))
                 (close-with-error commc "Missing name argument." nil)))
 
             "kill"
             (let [[name] args]
               (if name
-                (modules/kill! manager name commc)
+                (do (println "Received kill action from socket deployer for module" name)
+                    (modules/kill! manager name commc))
                 (close-with-error commc "Missing name argument." nil)))
 
             (close-with-error commc (str "Unkown command: " command) nil)))))))
@@ -103,26 +111,45 @@
     (.addLast pipeline "handler" handler)
     (.setOption bootstrap "child.tcpNoDelay", true)
     (.setOption bootstrap "child.keepAlive", true)
-    (.bind bootstrap (InetSocketAddress. port))
-    channel-factory))
+    {:server-channel (.bind bootstrap (InetSocketAddress. port))
+     :server-factory channel-factory}))
 
 
-(defrecord SocketDeployer [^ChannelFactory factory]
+(defrecord SocketDeployer [^ChannelFactory server-factory ^Channel server-channel
+                           ^ChannelGroup channels config]
   Deployer
   (bootstrap-modules [this])
 
   Stoppable
   (stop [_]
-    ;; ---TODO: Tidy clean up
-    (.shutdown factory)
-    ;; ---TODO: Wait for shutdown to complete?
-    ))
+    (println "Stopping socket-based module deployer...")
+    (println "Closing server socket...")
+    (.close server-channel)
+    (loop [i (:wait2finish-secs config)]
+      (when (and (< 0 i) (not (.isEmpty channels)))
+        (when (= 0 (mod i 5)) (println "Waiting for socket deployer actions to finish."))
+        (Thread/sleep 1000)
+        (recur (dec i))))
+    (when-not (.isEmpty channels)
+      (println "Still socket deployer actions running after" (:wait2finish-secs config)
+               "seconds. Closing the connections now."))
+    (.. channels close (await (* 1000 (:wait2close-secs config))))
+    (when-not (.isEmpty channels)
+      (println "Still open socket deployer connections after" (:wait2close-secs config)
+               "seconds. Killing them now."))
+    (.releaseExternalResources server-factory)
+    (.shutdown server-factory)
+    (println "Socked-based module deployer stopped.")))
 
 
 (def socket
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :socket)
+            _ (println "Starting socket-based module deployer, using config:" config)
             manager (require-system Manager systems)
-            handler (handler manager)]
-        (SocketDeployer. (netty-server (:port config) handler))))))
+            channels (DefaultChannelGroup. "containium management")
+            handler (handler manager channels)
+            {:keys [server-factory server-channel]} (netty-server (:port config) handler)]
+        (println "Socket-based module deployer started.")
+        (SocketDeployer. server-factory server-channel channels config)))))

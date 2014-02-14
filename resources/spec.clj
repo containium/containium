@@ -22,4 +22,6 @@
                       "taoensso\\.nippy.*"
                       "ring.*"]}
  :fs {:deployments "deployments"}
- :socket {:port 9999}}
+ :socket {:port 9999
+          :wait2finish-secs 30
+          :wait2close-secs 5}}

@@ -24,4 +24,6 @@
                       "ring.*"]}
  :repl {:port 13337}
  :fs {:deployments "dev-resources/deployments"}
- :socket {:port 9999}}
+ :socket {:port 9999
+          :wait2finish-secs 30
+          :wait2close-secs 5}}
