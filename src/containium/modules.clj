@@ -295,7 +295,7 @@
                      false)
                  ;; Action channel message
                  (if (instance? containium.modules.Response val)
-                   (if (and (:success? val) (= (:status val) :undeployed))
+                   (if (= (:status val) :undeployed)
                      ;; Succesfully undeployed, remove this channel.
                      (recur (dissoc channel+names channel))
                      ;; Failed to undeploy, schedule another deactivate.
