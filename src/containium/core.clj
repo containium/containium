@@ -165,7 +165,9 @@
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
-                                   (interpose "\n  " threads))))))]
+                                   (interpose "\n  " threads))))
+                 (println "Killing containium.")
+                 (System/exit 1)))]
     (.schedule timer task (int (* wait 1000)))))
 
 ;;; Daemon control
