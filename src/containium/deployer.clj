@@ -4,11 +4,11 @@
 
 (ns containium.deployer
   (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (Config get-config)]
-            [containium.modules :refer (Manager activate! deactivate!
-                                                       module-descriptor)]
-            [containium.deployer.watcher :refer (mk-watchservice watch close)]
-            [clojure.java.io :refer (file)])
+            [containium.systems.config :as config :refer (Config)]
+            [containium.modules :as modules :refer (Manager)]
+            [containium.deployer.watcher :as watcher]
+            [clojure.java.io :refer (file)]
+            [clojure.core.async :as async :refer (<!)])
   (:import [containium.systems Startable Stoppable]
            [java.nio.file Path WatchService]
            [java.io File]))
@@ -23,8 +23,8 @@
 
 ;;; File system implementation.
 
-;; (def ignore-files-re #".*\.status|\..*")
-
+(def link-files-re #"!\..*")
+(def activate-files-re #"whoop.activate.123")
 
 ;; (defn- handle-notification
 ;;   [dir kind [module-name]]
@@ -51,39 +51,50 @@
 ;;                    "\nThe action may have failed or may still complete.")
 ;;           (println "File system deployer action for" file-name ":" (:message response)))))))
 
-
-;; (defrecord DirectoryDeployer [manager ^File dir watcher]
-;;   Deployer
-;;   (bootstrap-modules [_]
-;;     (doseq [^File file (.listFiles dir)]
-;;       (when-not (re-matches ignore-files-re (.getName file))
-;;         (println "File system deployer now bootstrapping module" file)
-;;         (future (try
-;;                   (handle-event manager dir :create (.getAbsoluteFile file))
-;;                   (catch Throwable ex
-;;                     (println "handle-event :create failed")
-;;                     (.printStackTrace ex)))))))
-
-;;   Stoppable
-;;   (stop [_]
-;;     (println "Stopping filesystem deployment watcher...")
-;;     (close watcher)
-
-;;     (println "Filesystem deployment watcher stopped.")))
+(defn fs-event-handler
+  [manager dir kind path]
+  (println "FS EVENT:" kind path))
 
 
-;; (def directory
-;;   (reify Startable
-;;     (start [_ systems]
-;;       (let [config (get-config (require-system Config systems) :fs)
-;;             manager (require-system Manager systems)]
-;;         (println "Starting filesystem deployment watcher, using config" config "...")
-;;         (assert (:deployments config) "Missing :deployments configuration for FS system.")
-;;         (let [dir (file (:deployments config))]
-;;           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
-;;           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
+(defn module-event-loop
+  ([] (module-event-loop (async/chan 10)))
+  ([chan]
+     (async/go-loop []
+       (when-let [msg (<! chan)]
+         (println "MODULE EVENT:" msg)
+         (recur)))
+     chan))
 
-;;           (let [watcher (-> (mk-watchservice (partial handle-event manager dir))
-;;                             (watch dir))]
-;;             (println "Filesystem deployment watcher started.")
-;;             (DirectoryDeployer. manager dir watcher)))))))
+
+(defrecord DirectoryDeployer [manager ^File dir watcher module-event-tap]
+  Deployer
+  (bootstrap-modules [_]
+    (doseq [^File file (.listFiles dir)]
+      (when (re-matches link-files-re (.getName file))
+        (println "File system deployer now bootstrapping module" file)
+        ;; Do channel-activate-magic here.
+        (println "NOT!"))))
+
+  Stoppable
+  (stop [_]
+    (println "Stopping filesystem deployment watcher...")
+    (async/close! module-event-tap)
+    (watcher/close watcher)
+    (println "Filesystem deployment watcher stopped.")))
+
+
+(def directory
+  (reify Startable
+    (start [_ systems]
+      (let [config (config/get-config (require-system Config systems) :fs)
+            manager (require-system Manager systems)]
+        (println "Starting filesystem deploymer, using config" config "...")
+        (assert (:deployments config) "Missing :deployments configuration for FS system.")
+        (let [dir (file (:deployments config))]
+          (assert (.exists dir) (str "The directory '" dir "' does not exist."))
+          (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
+          (let [watcher (-> (watcher/mk-watchservice (partial fs-event-handler manager dir))
+                            (watcher/watch dir))
+                module-event-tap (async/tap (modules/event-mult manager) (module-event-loop))]
+            (println "Filesystem deployment watcher started.")
+            (DirectoryDeployer. manager dir watcher module-event-tap)))))))

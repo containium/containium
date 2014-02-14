@@ -9,7 +9,7 @@
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)]
             [clojure.edn :as edn]
-            [clojure.core.async :as async])
+            [clojure.core.async :as async :refer (<!!)])
   (:import [containium.systems Startable Stoppable]
            [java.io File]))
 
@@ -78,6 +78,21 @@
 
 (defrecord Module [name status descriptor box ring-name error])
 
+;; Events are put on the event-mult. Current events are:
+;;  :activate <name> descriptor-map
+;;  :deactivate <name>
+;;  :kill <name>
+;;  :status <name> status-keyword
+;;  :finish <name> Response-record
+(defrecord Event [type name data])
+
+
+(defn fire-event
+  ([manager type name]
+     (fire-event manager type name nil))
+  ([manager type name data]
+     (async/put! (:event-chan manager) (Event. type name data))))
+
 
 (defn- agent-error-handler
   [agent ^Exception exception]
@@ -101,10 +116,12 @@
 ;;; Agent processing functions.
 
 (defn- finish-action
-  [{:keys [error status] :as module} manager channel]
-  (async/put! channel (Response. (not error) status))
-  (async/close! channel)
-  (assoc module :error false))
+  [{:keys [name error status] :as module} manager channel]
+  (let [response (Response. (not error) status)]
+    (async/put! channel response)
+    (async/close! channel)
+    (fire-event manager :finished name response)
+    (assoc module :error false)))
 
 
 (defn- update-status
@@ -114,6 +131,7 @@
      (let [status (if error error-state success-state)]
        (async/put! channel (str "Module '" name "' status has changed to "
                                 (clojure.core/name status) "."))
+       (fire-event manager :status name status)
        (assoc module :status status))))
 
 
@@ -171,6 +189,7 @@
 
 (defn- activate-action
   [manager name agent channel {:keys [descriptor] :as args}]
+  (fire-event manager :activate name descriptor)
   (let [agent (or agent (new-agent manager name))]
     (case (:status @agent)
       :undeployed
@@ -203,6 +222,7 @@
 
 (defn- deactivate-action
   [manager name agent channel]
+  (fire-event manager :deactivate name)
   (async/put! channel (str "Planning undeployment action for module '" name "'..."))
   (send-off agent update-status manager channel :undeploying)
   (await agent)
@@ -215,11 +235,13 @@
   [{:keys [systems agents] :as manager} agent channel]
   (let [{:keys [box name status]} @agent
         log (channel-logger channel)]
+    (fire-event manager :kill name)
     (log (str "Killing module '" name "'..."))
     (swap! agents dissoc name)
-    (when (-> box :project :containium :ring)
-      (remove-box (:ring systems) (:ring-name name) log))
-    (stop-box name box log)
+    (when box
+      (when (-> box :project :containium :ring)
+        (remove-box (:ring systems) (:ring-name name) log))
+      (stop-box name box log))
     (log (str "Module '" name "' successfully killed."))
     (async/put! channel (Response. true nil))
     (async/close! channel)))
@@ -243,16 +265,47 @@
                (async/thread (kill-action manager agent channel))
 
                agent
-               (do (async/put! channel (str "Cannot " (clojure.core/name command) " module '" name
+               (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
+                   (async/put! channel (str "Cannot " (clojure.core/name command) " module '" name
                                             "' while its " (clojure.core/name status)))
                    (async/put! channel (Response. false status))
                    (async/close! channel))
 
                :else
-               (do (async/put! channel (str "No module named '" name "' is known. "
+               (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
+                   (async/put! channel (str "No module named '" name "' is known. "
                                             "Activate it first."))
                    (async/put! channel (Response. false nil))
-                   (async/close! channel)))))))
+                   (async/close! channel)))))
+     channel))
+
+
+(defn- deactivate-all
+  [manager names]
+  (let [timeout (async/timeout 90000)   ;;---TODO Make this configurable?
+        initial (into {} (for [name names] [(action :deactivate manager name (async/chan)) name]))]
+    (<!! (async/go-loop [channel+names initial]
+           (if-not (empty? channel+names)
+             (let [[val channel] (async/alts! (conj (vec (keys channel+names)) timeout))
+                   name (get channel+names channel)]
+               (if (= channel timeout)
+                 ;; Timeout, close all channels and return false.
+                 (do (doseq [channel (keys channel+names)]
+                       (async/close! channel))
+                     false)
+                 ;; Action channel message
+                 (if (instance? containium.modules.Response val)
+                   (if (and (:success? val) (= (:status val) :undeployed))
+                     ;; Succesfully undeployed, remove this channel.
+                     (recur (dissoc channel+names channel))
+                     ;; Failed to undeploy, schedule another deactivate.
+                     (recur (assoc (dissoc channel+names channel)
+                              (action :deactivate manager name (async/chan)) name)))
+                   ;; Ordinary message, just print it.
+                   (do (println "Modules shutdown:" val)
+                       (recur channel+names)))))
+             ;; No more channels, which means all are undeployed.
+             true)))))
 
 
 (defrecord DefaultManager [config systems agents event-chan event-mult]
@@ -283,16 +336,13 @@
 
   Stoppable
   (stop [this]
-    (if-let [to-undeploy (seq (remove #(= :undeployed (:status (deref (val %)))) @agents))]
-      (let [names+promises (for [[name agent] to-undeploy] [name (deactivate! this name)])
-            timeout (* 1000 30)]
-        (doseq [[name promise] names+promises]
-          (println (:message (deref promise timeout
-                                    (Response. false (str "Response for undeploying " name
-                                                          " timed out."))))))
-        (Thread/sleep 1000)
-        (recur))
-      (println "All modules are undeployed."))))
+    (when-let [to-undeploy (keys (remove #(= :undeployed (:status (deref (val %)))) @agents))]
+      (if (deactivate-all this to-undeploy)
+        (println "All modules successfully undeployed on shutdown.")
+        (let [not-deactivated (keys (remove #(= :undeployed (:status (deref (val %)))) @agents))]
+          (println (str "Failed to undeploy some modules on shutdown ("
+                        (apply str (interpose ", " not-deactivated))
+                        ") within 90 seconds. Continuing shutdown.")))))))
 
 
 ;;; Constructor function.

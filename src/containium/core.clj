@@ -214,7 +214,7 @@
                          :ring ring/http-kit
                          :session-store cass-session/embedded
                          :modules modules/default-manager
-                         ;; :fs deployer/directory
+                         :fs deployer/directory
                          :socket socket/socket
                          :repl repl/nrepl]
     ((if daemon? run-daemon #_else run) systems))
