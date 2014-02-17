@@ -7,8 +7,10 @@
             [containium.systems.config :as config :refer (Config)]
             [containium.modules :as modules :refer (Manager)]
             [containium.deployer.watcher :as watcher]
-            [clojure.java.io :refer (file)]
-            [clojure.core.async :as async :refer (<!)])
+            [containium.utils.async :as async-util]
+            [clojure.java.io :refer (file as-file)]
+            [clojure.core.async :as async :refer (<!)]
+            [clojure.edn :as edn])
   (:import [containium.systems Startable Stoppable]
            [java.nio.file Path WatchService]
            [java.io File]))
@@ -23,57 +25,77 @@
 
 ;;; File system implementation.
 
-(def link-files-re #"!\..*")
-(def activate-files-re #"whoop.activate.123")
-
-;; (defn- handle-notification
-;;   [dir kind [module-name]]
-;;   (spit (file dir (str module-name ".status")) (name kind)))
+;;---TODO Replace regexes with simpler/faster .endsWith calls?
+(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status)$).)+")
+(def ^:private activate-files-re   #"[^\.].*\.activate")
 
 
-;; (defn- handle-event
-;;   [manager dir kind file-or-path]
-;;   (let [file-name (if (instance? Path file-or-path)
-;;                     (.. ^Path file-or-path getFileName toString)
-;;                     (.getName ^File file-or-path))
-;;         timeout (* 1000 60)]
-;;     (when-not (re-matches ignore-files-re file-name)
-;;       (let [response (case kind
-;;                        :create (deref (activate! manager file-name
-;;                                                  (module-descriptor (file dir file-name)))
-;;                                       timeout ::timeout)
-;;                        :modify (deref (activate! manager file-name
-;;                                                  (module-descriptor (file dir file-name)))
-;;                                       timeout ::timeout)
-;;                        :delete (deref (deactivate! manager file-name) timeout ::timeout))]
-;;         (if (= ::timeout response)
-;;           (println "Response for file system deployer action for" file-name "timed out."
-;;                    "\nThe action may have failed or may still complete.")
-;;           (println "File system deployer action for" file-name ":" (:message response)))))))
+(defn- fs-event-handler
+  [manager dir kind ^Path path]
+  (let [filename (.. path getFileName toString)]
+    (cond
+     ;; Creation of .activate file.
+     (and (#{:create :modify} kind) (re-matches activate-files-re filename))
+     (do (.delete (file dir filename))
+         (let [name (subs filename 0 (- (count filename) (count ".activate")))
+               file (file dir name)]
+           (if (.exists file)
+             (try
+               (println "Activating" name "by filesystem event.")
+               (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
+                 (->> (modules/activate! manager name descriptor)
+                      (async-util/console-channel name)))
+               (catch Exception ex
+                 (println "Could not activate" name "-" ex)))
+             (println "Could not find" (str file) "in deployments directory."))))
+     ;; Deletion of descriptor file
+     (and (= :delete kind) (re-matches descriptor-files-re filename))
+     (try
+       (println "Deactivating" filename "by filesystem event.")
+       (->> (modules/deactivate! manager filename)
+            (async-util/console-channel filename))
+       (catch Exception ex
+         (println "Could not deactivate" filename "-" ex))))))
 
-(defn fs-event-handler
-  [manager dir kind path]
-  (println "FS EVENT:" kind path))
 
+(defn- module-event-loop
+  ([dir ] (module-event-loop dir (async/chan 10)))
+  ([dir chan]
+     (let [descriptors (atom {})]
+       (async/go-loop []
+         (when-let [msg (<! chan)]
+           (let [name (:name msg)]
+             (case (:type msg)
+               :activate
+               (do (when-let [descriptor (:data msg)]
+                     (swap! descriptors assoc name (update-in descriptor [:file] str)))
+                   (spit (file dir name) (get @descriptors name)))
 
-(defn module-event-loop
-  ([] (module-event-loop (async/chan 10)))
-  ([chan]
-     (async/go-loop []
-       (when-let [msg (<! chan)]
-         (println "MODULE EVENT:" msg)
-         (recur)))
+               :deactivate
+               (.delete (file dir name))
+
+               :status
+               (spit (file dir (str name ".status"))
+                     (clojure.core/name (:data msg)))
+
+               nil)) ;;---TODO Also delete on kill?
+           (recur))))
      chan))
 
 
 (defrecord DirectoryDeployer [manager ^File dir watcher module-event-tap]
   Deployer
   (bootstrap-modules [_]
-    (doseq [^File file (.listFiles dir)]
-      (when (re-matches link-files-re (.getName file))
-        (println "File system deployer now bootstrapping module" file)
-        ;; Do channel-activate-magic here.
-        (println "NOT!"))))
+    (doseq [^File file (.listFiles dir)
+            :let [name (.getName file)]]
+      (when (re-matches descriptor-files-re name)
+        (try
+          (println "Filesystem deployer now bootstrapping module" (str file))
+          (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
+            (->> (modules/activate! manager name descriptor)
+                 (async-util/console-channel name)))
+          (catch Exception ex
+            (println "Could not activate" name "-" ex))))))
 
   Stoppable
   (stop [_]
@@ -95,6 +117,6 @@
           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
           (let [watcher (-> (watcher/mk-watchservice (partial fs-event-handler manager dir))
                             (watcher/watch dir))
-                module-event-tap (async/tap (modules/event-mult manager) (module-event-loop))]
+                module-event-tap (async/tap (modules/event-mult manager) (module-event-loop dir))]
             (println "Filesystem deployment watcher started.")
             (DirectoryDeployer. manager dir watcher module-event-tap)))))))

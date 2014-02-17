@@ -15,6 +15,7 @@
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
+            [containium.utils.async :as async-util]
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]
@@ -36,16 +37,6 @@
 
 
 ;;; Command loop.
-
-(defn- console-channel
-  [name]
-  (let [channel (async/chan)]
-    (async/go-loop []
-      (when-let [msg (<! channel)]
-        (println (str "[" name "]") msg)
-        (recur)))
-    channel))
-
 
 (defmulti handle-command
   "This multi-method dispatches on the command argument. It also
@@ -119,13 +110,13 @@
       "activate" (if name
                    (modules/activate! (:modules systems) name
                                       (when path (modules/module-descriptor (as-file path)))
-                                      (console-channel name))
+                                      (async-util/console-channel name))
                    (println "Missing name argument."))
       "deactivate" (if name
-                     (modules/deactivate! (:modules systems) name (console-channel name))
+                     (modules/deactivate! (:modules systems) name (async-util/console-channel name))
                      (println "Missing name argument."))
       "kill" (if name
-               (modules/kill! (:modules systems) name (console-channel name))
+               (modules/kill! (:modules systems) name (async-util/console-channel name))
                (println "Missing name argument."))
       (if action
         (println (str "Unknown action '" action "', see help."))
@@ -187,7 +178,7 @@
   loop exited."
   [sys]
   (alter-var-root #'systems (constantly sys))
-  ;; (deployer/bootstrap-modules (:fs sys))
+  (deployer/bootstrap-modules (:fs sys))
   (command-loop sys))
 
 (defn run-daemon
@@ -196,7 +187,7 @@
   (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. ^Runnable shutdown))
   (println "Waiting for the kill.")
   (alter-var-root #'systems (constantly sys))
-  ;; (deployer/bootstrap-modules (:fs sys))
+  (deployer/bootstrap-modules (:fs sys))
   (.await daemon-latch))
 
 
