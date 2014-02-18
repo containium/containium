@@ -26,7 +26,7 @@
 ;;; File system implementation.
 
 ;;---TODO Replace regexes with simpler/faster .endsWith calls?
-(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status)$).)+")
+(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status|deactivated)$).)+")
 (def ^:private activate-files-re   #"[^\.].*\.activate")
 
 
@@ -34,7 +34,7 @@
   [manager dir kind ^Path path]
   (let [filename (.. path getFileName toString)]
     (cond
-     ;; Creation of .activate file.
+     ;; Creation or touch of .activate file.
      (and (#{:create :modify} kind) (re-matches activate-files-re filename))
      (do (.delete (file dir filename))
          (let [name (subs filename 0 (- (count filename) (count ".activate")))
@@ -78,7 +78,10 @@
                (spit (file dir (str name ".status"))
                      (clojure.core/name (:data msg)))
 
-               nil)) ;;---TODO Also delete on kill?
+               :kill
+               (.delete (file dir name))
+
+               nil))
            (recur))))
      chan))
 
@@ -87,15 +90,15 @@
   Deployer
   (bootstrap-modules [_]
     (doseq [^File file (.listFiles dir)
-            :let [name (.getName file)]]
-      (when (re-matches descriptor-files-re name)
-        (try
-          (println "Filesystem deployer now bootstrapping module" (str file))
-          (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
-            (->> (modules/activate! manager name descriptor)
-                 (async-util/console-channel name)))
-          (catch Exception ex
-            (println "Could not activate" name "-" ex))))))
+            :let [name (.getName file)]
+            :when (re-matches descriptor-files-re name)]
+      (try
+        (println "Filesystem deployer now bootstrapping module" (str file))
+        (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
+          (->> (modules/activate! manager name descriptor)
+               (async-util/console-channel name)))
+        (catch Exception ex
+          (println "Could not activate" name "-" ex)))))
 
   Stoppable
   (stop [_]

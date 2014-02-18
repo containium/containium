@@ -19,8 +19,7 @@
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]
-            [clojure.pprint :refer (pprint print-table)]
-            [clojure.core.async :as async :refer (<!)])
+            [clojure.pprint :refer (pprint print-table)])
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask])
   (:gen-class))
