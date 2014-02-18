@@ -63,7 +63,7 @@ For an example module, one could have the following `example_module/core.clj` fi
 
 ```clojure
 (ns example-module.core
-  (:require [containium.systems :refer (with-systems protocol-forwarder)]
+  (:require [containium.systems :refer (with-systems)]
             [containium.systems.config :refer (map-config)]
             [containium.systems.ring :refer (test-http-kit)]
             [ring.middleware.session :refer (wrap-session)]
@@ -80,10 +80,7 @@ For an example module, one could have the following `example_module/core.clj` fi
 (defn start [systems conf]
   ;; First it is good to test whether a :session-store system is available.
   (assert (:session-store systems) "Test module requires a :session-store system.")
-  ;; Use the protocol-forwarder to use systems (which in turn use clojure protocols)
-  ;; from within a Boxure box.
-  (let [session-store ((protocol-forwarder SessionStore) (:session-store systems))]
-    (alter-var-root #'app #(wrap-session % {:store session-store}))))
+  (alter-var-root #'app #(wrap-session % {:store (:session-store systems)}))))
 
 
 ;;; Each module has a stop function, taking the result of the start function.

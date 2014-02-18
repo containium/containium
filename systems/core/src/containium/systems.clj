@@ -4,6 +4,7 @@
 
 (ns containium.systems
   "Logic for starting and stopping systems."
+  (:require [containium.exceptions :as ex])
   (:import [clojure.lang Compiler]))
 
 
@@ -34,14 +35,17 @@
            (try
              (stop system#)
              (catch Throwable ex#
+               (ex/exit-when-fatal ex#)
                (println "Exception while stopping system component" ~name "-" ex#)
                (.printStackTrace ex#)))))
        (catch Throwable ex#
+         (ex/exit-when-fatal ex#)
          (println "Exception while starting system component" ~name "-" ex#)
          (.printStackTrace ex#)))
     `(try
       ~@body
       (catch Throwable ex#
+        (ex/exit-when-fatal ex#)
         (println "Exception while running `with-systems` body. Stopping systems.")
         (.printStackTrace ex#)))))
 
@@ -55,10 +59,7 @@
   the system implementation and/or Startable. If it is a Startable,
   the return value of the `start` function is considered to be the
   system. It is also that system on which `stop` is called, if it
-  satisfies Stoppable.
-
-  Use the `protocol-forwarder` macro to use protocol implementation
-  inside modules."
+  satisfies Stoppable."
   [symbol system-components & body]
   (assert (even? (count system-components))
           "System components vector needs to have an even number of forms.")
@@ -78,27 +79,41 @@
                               " systems found satisfying protocol " (:on protocol)))))))
 
 
-(defmacro protocol-forwarder
-  "Reifies a protocol that forwards all calls to an existing
-  implementation. For example:
+(defn protocol-forwarder "DEPRECATED" [protocol] identity)
 
-  (defprotocol Foo (bar [this baz]))
 
-  (deftype FooImpl [] Foo (bar [_ baz] (prn baz)))
+(defn forward-protocol
+  "Extends the given object or class with the given protocol. The
+  protocol implementation merely forwards the functions. This is used
+  for using objects via the protocol, which already satisfy that
+  protocol, but in another Clojure runtime. If the given object or
+  class already implements or satisfies the protocol, this is a noop."
+  [object-or-class protocol]
+  (assert object-or-class "object or class cannot be nil")
+  (assert (#'clojure.core/protocol? protocol) "protocol argument must point to a protocol")
+  (let [class (if (class? object-or-class) object-or-class (class object-or-class))]
+    (try
+      (extend class protocol
+              (into {} (for [sig (:sigs protocol)
+                             :let [{:keys [name arglists]} (val sig)]]
+                         [(keyword name)
+                          (eval `(fn ~@(for [arglist arglists]
+                                         `(~arglist (~(symbol (str "." (Compiler/munge (str name))))
+                                                     ~@arglist)))))])))
+      (catch IllegalArgumentException iae))))
 
-  (def foo-forwarder (protocol-forwarder Foo))
 
-  (bar (foo-forwarder (FooImpl.)) 'alice) ; prints alice.
-
-  A forwarder is useful in case a protocol does not recognize the
-  implementation as such."
-  [protocol]
-  (let [impl (gensym "impl")]
-    `(fn [~impl]
-       (reify ~protocol
-         ~@(for [sig (:sigs (eval protocol))
-                 :let [{:keys [name arglists]} (val sig)]
-                 arglist arglists]
-             `(~name ~arglist (. ~impl
-                                 ~(symbol (Compiler/munge (str name)))
-                                 ~@(rest arglist))))))))
+(defn forward-systems
+  "This function should be called from within an isolated Clojure
+  runtime (boxure), so the system protocols work on the values in the
+  system map."
+  [systems]
+  (let [keyword->protocol {:cassandra 'containium.systems.cassandra/Cassandra
+                           :elastic 'containium.systems.elasticsearch/Elastic
+                           :kafka 'containium.systems.kafka/Kafka
+                           :session-store 'ring.middleware.session.store/SessionStore}]
+    (doseq [[keyword system] systems
+            :let [protocol (keyword->protocol keyword)]
+            :when protocol]
+      (require (symbol (namespace protocol)))
+      (forward-protocol system (eval protocol)))))

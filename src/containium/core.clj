@@ -5,10 +5,11 @@
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
             [containium.systems.cassandra.embedded12 :as cassandra]
-            [containium.systems.cassandra.alia1 :as alia1]
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
+            [containium.systems.ring.http-kit :as http-kit]
+            [containium.systems.ring.jetty9 :as jetty9]
             [containium.systems.ring-session-cassandra :as cass-session]
             [containium.deployer :as deployer]
             [containium.deployer.socket :as socket]
@@ -16,6 +17,7 @@
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
             [containium.utils.async :as async-util]
+            [containium.exceptions :as ex]
             [clojure.java.io :refer (resource as-file)]
             [clojure.string :refer (split trim)]
             [clojure.tools.nrepl.server :as nrepl]
@@ -53,12 +55,13 @@
   [_ _ _]
   (println (str "Available commands are:"
                 "\n"
-                "\n module <list|describe|activate|deactivate|kill> [name [path]]"
+                "\n module <list|describe|activate|deactivate|kill|versions> [name [path]]"
                 "\n   Prints a list of installed modules, describes what is known of a module by"
                 "\n   name, activates (deploy/redeploy/swap) a module by name and path, or "
                 "\n   deactivates (undeploy) a module by name. Paths can point to a directory or"
                 "\n   to a JAR file. Killing a module is also possible, which forces the"
-                "\n   module to a halt, whatever its state."
+                "\n   module to a halt, whatever its state. The versions actions shows the"
+                "\n   *-Version MANIFEST data in the classpath of the module."
                 "\n"
                 "\n repl <start|stop> [port]"
                 "\n   Starts an nREPL at the specified port, or stops the current one, inside"
@@ -96,31 +99,29 @@
   (let [[action name path] args
         timeout (* 1000 60)]
     (case action
-      "list" (print-table (map #(select-keys % [:name :status])
-                               (modules/list-modules (:modules systems))))
-
-      "describe" (if name
-                   (if-let [data (first (filter #(= (:name %) name)
-                                                (modules/list-modules (:modules systems))))]
-                     (print-table (reduce (fn [s [k v]] (conj s {:key k :value v})) nil data))
-                     (println "Module" name "unknown."))
-                   (println "Missing name argument."))
+      "list" (print-table (modules/list-installed (:modules systems)))
 
       "activate" (if name
                    (modules/activate! (:modules systems) name
                                       (when path (modules/module-descriptor (as-file path)))
                                       (async-util/console-channel name))
                    (println "Missing name argument."))
+
       "deactivate" (if name
                      (modules/deactivate! (:modules systems) name (async-util/console-channel name))
                      (println "Missing name argument."))
+
       "kill" (if name
                (modules/kill! (:modules systems) name (async-util/console-channel name))
                (println "Missing name argument."))
+
+      "versions" (if name
+                   (modules/versions (:modules systems) name)
+                   (println "Missing name argument"))
+
       (if action
         (println (str "Unknown action '" action "', see help."))
         (println "Missing action argument, see help.")))))
-
 
 
 (defn command-loop
@@ -132,32 +133,43 @@
   [systems]
   (let [jline (ConsoleReader.)]
     (loop []
-      (let [[command & args] (map (fn [[normal quoted]] (or quoted normal)) (re-seq #"'([^']+)'|[^\s]+" (trim (.readLine jline "containium> "))))]
+      (let [[command & args] (map (fn [[normal quoted]] (or quoted normal))
+                                  (re-seq #"'([^']+)'|[^\s]+"
+                                          (trim (.readLine jline "containium> "))))]
         (case command
           nil (recur)
           "shutdown" nil
           (do (try
                 (handle-command command args systems)
                 (catch Throwable t
+                  (ex/exit-when-fatal t)
                   (println "Error handling command" command ":")
                   (.printStackTrace t)))
               (recur)))))))
+
+
+(defmacro command [cmd & args]
+  "Call console commands from the REPL. For example:
+  (command module versions foo)."
+  (let [cmd (str cmd)
+        args (mapv str args)]
+    `(print (with-out-str (handle-command ~cmd ~args systems)))))
 
 
 ;;; Thread debug on shutdown.
 
 (defn shutdown-timer
   "Start a timer that shows debug information, iff the JVM has not
-  shutdown yet and `wait` seconds have passed."
-  [wait]
+  shutdown yet and `wait` seconds have passed. If the `kill?` argument
+  is set to true, containium will be force-terminated as well."
+  [wait kill?]
   (let [timer (Timer. "shutdown-timer" true)
         task (proxy [TimerTask] []
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
                                    (interpose "\n  " threads))))
-                 (println "Killing containium.")
-                 (System/exit 1)))]
+                 (when kill? (System/exit 1))))]
     (.schedule timer task (int (* wait 1000)))))
 
 ;;; Daemon control
@@ -196,12 +208,14 @@
   When run with no arguments: interactive console is started.
   Any other argument will activate daemon mode."
   [& [daemon? args]]
+  (ex/register-default-handler)
   (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                          :cassandra cassandra/embedded12
-                         :alia (alia1/alia1 :alia)
                          :elastic elastic/embedded
                          :kafka kafka/embedded
-                         :ring ring/http-kit
+                         :http-kit http-kit/http-kit
+                         :jetty9 jetty9/jetty9
+                         :ring ring/distributed
                          :session-store cass-session/embedded
                          :modules modules/default-manager
                          :fs deployer/directory
@@ -210,4 +224,4 @@
     ((if daemon? run-daemon #_else run) systems))
   (println "Shutting down...")
   (shutdown-agents)
-  (shutdown-timer 10))
+  (shutdown-timer 15 daemon?))

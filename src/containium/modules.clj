@@ -4,24 +4,37 @@
 
 (ns containium.modules
   "Functions for managing the starting and stopping of modules."
-  (:require [containium.systems :refer (require-system)]
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)]
             [clojure.edn :as edn]
             [clojure.core.async :as async :refer (<!!)])
   (:import [containium.systems Startable Stoppable]
-           [java.io File]))
+           [java.io File]
+           [java.net URL]
+           [java.util Collections Map$Entry]
+           [java.util.jar Manifest]))
 
 
 ;;; Public system definitions.
 
 (defrecord Response [success? status])
 
+;; Events are put on the event-mult. Current events are:
+;;  :activate <name> descriptor-map
+;;  :deactivate <name>
+;;  :kill <name>
+;;  :status <name> status-keyword
+;;  :finish <name> Response-record
+(defrecord Event [type name data])
+
+
 (defprotocol Manager
-  (list-modules [this]
-    "Returns a sequence of maps with at least :name, :status and
-    :descriptor entries for the currently known modules.")
+  (list-installed [this]
+    "Returns a sequence of maps with :name and :state entries for the
+    currently installed modules.")
 
   (activate! [this name descriptor] [this name descriptor channel]
     "Try to deploy, redeploy or swap the module under the specified
@@ -47,7 +60,13 @@
   (event-mult [this]
     "Returns an async mult on which tapped channels receive module
     management events. Please untap or close taps when they won't be
-    read from anymore."))
+    read from anymore.")
+
+  (versions [this name]
+    "Prints the *-Version MANIFEST entries it can find in the classpath
+    of the module. The following keys are filtered out:
+    Manifest-Version Implementation-Version Ant-Version
+    Specification-Version Archiver-Version Bundle-Version"))
 
 
 (defn module-descriptor
@@ -59,39 +78,27 @@
   In a later stage (i.e. start-box) the :name, :project and :profiles keys can be conj'd."
   [^File file]
   (assert file "Path to module, or module descriptor File required!")
-  (let [descriptor-defaults {:file file :profiles [:default]}]
+  (let [descriptor-defaults {:file file, :profiles [:default]}]
+    (assert (.exists file) (str file " does not exist."))
     (if (.isDirectory file)
       descriptor-defaults
       ;; else if not a directory.
-      (if (.exists file)
-        (if-let [module-map (try (edn/read-string (slurp file)) (catch Throwable ex))]
-          (let [file-str (str (:file module-map))
-                file (File. file file-str)]
-            (when-not (.exists file) (throw (IllegalArgumentException. (str file " does not exist."))))
-            (merge descriptor-defaults module-map {:file file}))
-          ;; else if not a module descriptor file.
-          descriptor-defaults)
-        (throw (IllegalArgumentException. (str file " does not exist.")))))))
+      (if-let [module-map (try (let [data (edn/read-string {:readers *data-readers*} (slurp file))]
+                                 (when (map? data) data))
+                               (catch Throwable ex (ex/exit-when-fatal ex)))]
+        (let [file-str (str (:file module-map))
+              file (if-not (.startsWith file-str "/")
+                     (File. (.getParent file) file-str)
+                     (File. file-str))]
+          (assert (.exists file) (str file " does not exist."))
+          (merge descriptor-defaults module-map {:file file}))
+        ;; else if not a module descriptor file.
+        descriptor-defaults))))
 
 
 ;;; Default implementation.
 
 (defrecord Module [name status descriptor box ring-name error])
-
-;; Events are put on the event-mult. Current events are:
-;;  :activate <name> descriptor-map
-;;  :deactivate <name>
-;;  :kill <name>
-;;  :status <name> status-keyword
-;;  :finish <name> Response-record
-(defrecord Event [type name data])
-
-
-(defn fire-event
-  ([manager type name]
-     (fire-event manager type name nil))
-  ([manager type name data]
-     (async/put! (:event-chan manager) (Event. type name data))))
 
 
 (defn- agent-error-handler
@@ -106,6 +113,13 @@
                      :error-handler agent-error-handler)]
     (swap! agents assoc name agent)
     agent))
+
+
+(defn fire-event
+  ([manager type name]
+     (fire-event manager type name nil))
+  ([manager type name data]
+     (async/put! (:event-chan manager) (Event. type name data))))
 
 
 (defn- channel-logger
@@ -181,11 +195,6 @@
 
 
 ;;; Protocol implementation functions.
-
-(defn- list-modules*
-  [{:keys [agents] :as manager}]
-  (map deref (vals @agents)))
-
 
 (defn- activate-action
   [manager name agent channel {:keys [descriptor] :as args}]
@@ -308,10 +317,34 @@
              true)))))
 
 
+(defn- versions*
+  [module]
+  (if-let [^ClassLoader box-cl (-> module :box :box-cl)]
+    (doseq [^URL resource (Collections/list (.getResources box-cl "META-INF/MANIFEST.MF"))]
+      (with-open [stream (.openStream resource)]
+        (let [mf (Manifest. stream)
+              version-entries (filter (fn [^Map$Entry e]
+                                        (let [name (.. e getKey toString)]
+                                          (and (.endsWith name "-Version")
+                                               (not (#{"Manifest-Version"
+                                                       "Implementation-Version"
+                                                       "Ant-Version"
+                                                       "Specification-Version"
+                                                       "Archiver-Version"
+                                                       "Bundle-Version"} name)))))
+                                      (.entrySet (.getMainAttributes mf)))]
+          (doseq [^Map$Entry entry version-entries]
+            (println (.. entry getKey toString) ":" (.getValue entry))))))
+    (println "Module" (:name module) "not running.")))
+
+
 (defrecord DefaultManager [config systems agents event-chan event-mult]
   Manager
-  (list-modules [this]
-    (list-modules* this))
+  (list-installed [_]
+    (keep (fn [[name agent]]
+            (if-let [status (:status @agent)]
+              {:name name :status status}))
+          @agents))
 
   (activate! [this name descriptor]
     (action :activate this name (async/chan) {:descriptor descriptor}))
@@ -334,6 +367,11 @@
   (event-mult [this]
     event-mult)
 
+  (versions [_ name]
+    (if-let [agent (@agents name)]
+      (versions* @agent)
+      (println "No module named" name "known.")))
+
   Stoppable
   (stop [this]
     (when-let [to-undeploy (keys (remove #(= :undeployed (:status (deref (val %)))) @agents))]
@@ -350,7 +388,7 @@
 (def default-manager
   (reify Startable
     (start [_ systems]
-      (require-system Ring systems)
+      (assert (:ring systems))
       (let [config (require-system Config systems)
             event-chan (async/chan)]
         (println "Started default Module manager.")

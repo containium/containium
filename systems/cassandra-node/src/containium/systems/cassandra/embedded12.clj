@@ -71,6 +71,10 @@
   (encode-value [value] "Encodes a value to a Cassandra encoded ByteBuffer."))
 
 (extend-protocol Encode
+  (Class/forName "[B")
+  (abstract-type [value] BytesType/instance)
+  (encode-value [value] (ByteBuffer/wrap value))
+
   BigDecimal
   (abstract-type [value] DecimalType/instance)
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
@@ -192,7 +196,7 @@
 
   (do-prepared [this statement opts-values]
     (cond (sequential? opts-values) (do-prepared* this statement nil opts-values)
-          (map? opts-values) (do-prepared* this statement opts-values nil)
+          (map? opts-values) (do-prepared* this statement opts-values (:values opts-values))
           :else (throw (IllegalArgumentException.
                         "Parameter opts-values must be a map or sequence."))))
 

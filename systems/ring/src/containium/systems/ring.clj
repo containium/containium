@@ -5,11 +5,9 @@
 (ns containium.systems.ring
   "The interface definition of the Ring system. The Ring system offers
   an API to a ring server."
-  (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (Config get-config)]
-            [org.httpkit.server :refer (run-server)]
-            [boxure.core :as boxure])
-  (:import [containium.systems Startable Stoppable]))
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (Startable)]
+            [boxure.core :as boxure]))
 
 
 ;;; Public interface
@@ -29,7 +27,7 @@
     "Removes a box's ring handler from the ring server."))
 
 
-;;; HTTP-Kit implementation.
+;;; Generic logic used by Ring system implementations.
 
 (defrecord RingApp [name box handler-fn ring-conf sort-value])
 
@@ -52,8 +50,8 @@
 
 (defmacro matcher
   "Evaluates to a match form, used by the make-app function."
-  [{:keys [host-regex context-path]} uri-sym server-name-sym]
-  (let [host-test `(re-matches ~host-regex ~server-name-sym)
+  [{:keys [host-regex context-path]} uri-sym host-sym]
+  (let [host-test `(re-matches ~(if host-regex (re-pattern host-regex)) ~host-sym)
         context-test `(and (.startsWith ~uri-sym ~context-path)
                            (= (get ~uri-sym ~(count context-path)) \/))]
     `(and ~@(remove nil? (list (when host-regex host-test)
@@ -66,12 +64,13 @@
     (try
       (handler request)
       (catch Throwable t
+        (ex/exit-when-fatal t)
         (println "Error handling request:" request)
         (.printStackTrace t)
         {:status 500 :body "Internal error."}))))
 
 
-(defn- make-app
+(defn make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
   [log-fn apps]
@@ -79,10 +78,10 @@
                   (let [sorted (vec (sort-apps apps log-fn))
                         fn-form `(fn [~'sorted ~'request]
                                    (let [~'uri (:uri ~'request)
-                                         ~'server-name (:server-name ~'request)]
+                                         ~'host (-> ~'request :headers (get "host"))]
                                      (or ~@(for [index (range (count sorted))
                                                  :let [app (get sorted index)]]
-                                             `(when (matcher ~(:ring-conf app) ~'uri ~'server-name)
+                                             `(when (matcher ~(:ring-conf app) ~'uri ~'host)
                                                 (let [~'app (get ~'sorted ~index)]
                                                   (boxure/call-in-box
                                                    (:box ~'app)
@@ -101,13 +100,13 @@
   [ring-conf]
   (let [result ring-conf
         result (update-in result [:context-path]
-                          #(when % (if (= (last %) \/) (apply str (butlast %)) %)))
-        result (update-in result [:context-path]
-                          #(when % (if (= (first %) \/) % (str "/" %))))]
+                          (fn [path] (let [path (if (= (first path) \/) path #_else (str "/" path))
+                                           path (if (= (last path) \/) (apply str (butlast path))
+                                                    #_else path)] path)))]
     result))
 
 
-(defn- box->ring-app
+(defn box->ring-app
   [name {:keys [project] :as box} log-fn]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         _ (assert (:handler ring-conf)
@@ -124,57 +123,22 @@
     (RingApp. name box handler-fn ring-conf sort-value)))
 
 
-(defrecord HttpKit [stop-fn app apps]
+;;; Distribution implementation.
+
+(defrecord DistributedRing [rings]
   Ring
   (upstart-box [_ name box log-fn]
-    (->> (box->ring-app name box log-fn)
-         (swap! apps assoc name)
-         (make-app log-fn)
-         (reset! app)))
+    (doseq [ring rings]
+      (upstart-box ring name box log-fn)))
   (remove-box [_ name log-fn]
-    (->> (swap! apps dissoc name)
-         (make-app log-fn)
-         (reset! app)))
-
-  Stoppable
-  (stop [_] (stop-fn)))
+    (doseq [ring rings]
+      (remove-box ring name log-fn))))
 
 
-(def http-kit
+(def distributed
   (reify Startable
     (start [_ systems]
-      (let [config (require-system Config systems)
-            app (atom (make-app println {}))
-            app-fn (fn [request] (@app request))
-            stop-fn (run-server app-fn (get-config config :http-kit))]
-        (HttpKit. stop-fn app (atom {}))))))
-
-
-;;; HTTP-Kit implementation for testing.
-
-(defrecord TestHttpKit [stop-fn]
-  Ring
-  (upstart-box [_ _ _ _]
-    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
-  (remove-box [_ _ _]
-    (Exception. "Cannot be used on a test HTTP-Kit implementation."))
-
-  Stoppable
-  (stop [_]
-    (println "Stopping test HTTP-Kit server...")
-    (stop-fn)
-    (println "Stopped test HTTP-Kit server.")))
-
-
-(defn test-http-kit
-  "Create a simple HTTP-kit server, serving the specified ring handler
-  function. This function returns a Startable, requiring a Config
-  system to be available when started."
-  [handler]
-  (reify Startable
-    (start [_ systems]
-      (let [config (get-config (require-system Config systems) :http-kit)
-            _ (println "Starting test HTTP-Kit, using config" config "...")
-            stop-fn (run-server handler config)]
-        (println "Started test HTTP-Kit.")
-        (TestHttpKit. stop-fn)))))
+      (if-let [ring-systems (seq (filter (comp (partial satisfies? Ring) val) systems))]
+        (do (println "Initialising Ring distributer among servers:" (keys ring-systems))
+            (DistributedRing. (vals ring-systems)))
+        (throw (Exception. "No Ring systems have been started."))))))

@@ -76,6 +76,12 @@
       (.toByteArray baos))))
 
 
+(defn bytes->bytebuffer
+  "Converts a byte array to a ByteBuffer."
+  [ba]
+  (ByteBuffer/wrap ba))
+
+
 (defn cql-statements
   "Returns the CQL statement Strings from the specified schema String
   in a sequence."

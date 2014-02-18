@@ -4,7 +4,15 @@
 
 ;;;; Production settings.
 
-{:http-kit {:port 8080}
+{:http-kit {:port 8080
+            :max-body 52428800} ; 50 mb
+ :netty {:port 8090
+         :zero-copy false
+         :max-http-chunk-length 1073741824 ; 1 gb
+         :max-channel-memory-size 1048576 ; 1 mb
+         :max-total-memory-size 1048576} ; 1 mb
+ :jetty9 {:port 8100
+          :join? false}
  :cassandra {:config-file "cassandra.yaml"}
  :alia {:contact-points ["localhost"]
         :port 9042}
@@ -20,7 +28,21 @@
            :isolates ["containium.*"
                       "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
-                      "ring.*"]}
+                      "ring.*"
+                      "leiningen.*"
+                      "robert.hooke"
+                      "cemerick.pomegranate.*"
+                      "bultitude.core*"
+                      "dynapath.*"
+                      ;; Alia system deps
+                      "qbits.*"
+                      "clj.time.*"
+                      "cljs.core.async.*"
+                      "lamina.*"
+                      "taoensso.nippy.*"
+                      "potemkin.*"
+                      "flatland.*"
+                      "useful.*"]}
  :fs {:deployments "deployments"}
  :socket {:port 9999
           :wait2finish-secs 30

@@ -6,7 +6,8 @@
   "Logic for starting and stopping boxes."
   (:require [boxure.core :refer (boxure) :as boxure]
             [leiningen.core.project]
-            [clojure.core.async :as async]))
+            [clojure.core.async :as async]
+            [containium.exceptions :as ex]))
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -44,27 +45,33 @@
                (interpose "\n  " errors))
         (let [module-config (meta-merge (:containium project) (:containium descriptor))
               boxure-config (if-let [module-isolates (:isolates module-config)]
-                                    (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
-                             #_else boxure-config)
-              box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
+                              (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
+                              #_else boxure-config)
+              box (boxure (assoc boxure-config :debug? false) (.getClassLoader clojure.lang.RT) file)
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
-                                {:project project, :active-profiles active-profiles, :containium module-config})
+                                {:project project
+                                 :active-profiles active-profiles
+                                 :containium module-config})
               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
-                                              ~(:start module-config)))]
-          (if (instance? Throwable start-fn)
-            (do (boxure/clean-and-stop box)
-                (throw start-fn))
-            (try
-              (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
-                (log-fn "Module" name "started.")
-                (assoc box :start-result start-result, :descriptor descriptor))
-              (catch Throwable ex
-                (boxure/clean-and-stop box)
-                (throw ex)))))))
+                                              ~(:start module-config)))
+              forward-fn @(boxure/eval box '(do (require 'containium.systems)
+                                                containium.systems/forward-systems))]
+          (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
+          (when (instance? Throwable forward-fn) (boxure/clean-and-stop box) (throw forward-fn))
+          (try
+            (boxure/call-in-box box forward-fn systems)
+            (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
+              (println "Module" name "started.")
+              (assoc box :start-result start-result, :descriptor descriptor))
+            (catch Throwable ex
+              (ex/exit-when-fatal ex)
+              (boxure/clean-and-stop box)
+              (throw ex))))))
     (catch Throwable ex
-      (log-fn "Exception while starting module" name ":" ex)
+      (ex/exit-when-fatal ex)
+      (println "Exception while starting module" name ":" ex)
       (.printStackTrace ex))))
 
 
@@ -80,6 +87,7 @@
         :stopped)
       (catch Throwable ex
         (log-fn "Exception while stopping module" name ":" ex)
+        (ex/exit-when-fatal ex)
         (.printStackTrace ex))
       (finally
         (boxure/clean-and-stop box)
