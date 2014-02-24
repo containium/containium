@@ -132,7 +132,7 @@
 (defn- finish-action
   [{:keys [name error status] :as module} manager channel]
   (let [response (Response. (not error) status)]
-    (log-command channel response)
+    (log-command channel response :raw)
     (async/close! channel)
     (fire-event manager :finished name response)
     (assoc module :error false)))
@@ -251,7 +251,7 @@
         (remove-box (:ring systems) (:ring-name name) log))
       (stop-box name box log))
     (log (str "Module '" name "' successfully killed."))
-    (log-command channel (Response. true nil))
+    (log-command channel (Response. true nil) :raw)
     (async/close! channel)))
 
 
@@ -276,14 +276,14 @@
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
                    (log-command channel (str "Cannot " (clojure.core/name command) " module '" name
                                             "' while its " (clojure.core/name status)))
-                   (log-command channel (Response. false status))
+                   (log-command channel (Response. false status) :raw)
                    (async/close! channel))
 
                :else
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
                    (log-command channel (str "No module named '" name "' is known. "
                                             "Activate it first."))
-                   (log-command channel (Response. false nil))
+                   (log-command channel (Response. false nil) :raw)
                    (async/close! channel)))))
      channel))
 
@@ -302,21 +302,17 @@
                        (async/close! channel))
                      false)
                  ;; Action channel message
-                 (cond
-                  ;; Respones message.
-                  (instance? containium.modules.Response val)
-                  (if (= (:status val) :undeployed)
-                    ;; Succesfully undeployed, remove this channel.
-                    (recur (dissoc channel+names channel))
-                    ;; Failed to undeploy, schedule another deactivate.
-                    (recur (assoc (dissoc channel+names channel)
-                             (deactivate! manager name) name)))
-                  ;; Closed action channel, ignore it and remove it.
-                  (nil? val)
-                  (recur (dissoc channel+names channel))
-                  ;; Ordinary message, ignore it.
-                  :else
-                  (recur channel+names))))
+                 (if (instance? containium.modules.Response val)
+                   ;; Response message, process it.
+                   (if (= (:status val) :undeployed)
+                     ;; Succesfully undeployed, remove this channel.
+                     (recur (dissoc channel+names channel))
+                     ;; Failed to undeploy, schedule another deactivate.
+                     (recur (assoc (dissoc channel+names channel)
+                              (deactivate! manager name) name)))
+                   ;; Ordinary message, ignore it.
+                   ;;---TODO Ignore all of it? As some command-only messages might get lost?
+                   (recur channel+names))))
              ;; No more channels, which means all are undeployed.
              true)))))
 

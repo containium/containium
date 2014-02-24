@@ -18,24 +18,28 @@
 ;;---TODO Make sure no problems arise when a tapped channels fails to untap and read.
 
 (defn log-command
-  "Log a messages that is only of interest for the command issuer."
-  [commandc msg & rest]
-  (async/put! commandc (str msg " " (apply str (interpose " " rest)) \newline)))
+  "Log a messages that is only of interest for the command issuer. If
+  the last argument is `:raw`, then the other message arguments are
+  put on the channel one by one, without converting them to a String."
+  [commandc & rest]
+  (if (= (last rest) :raw)
+    (doseq [r (butlast rest)] (async/put! commandc r))
+    (async/put! commandc (str (apply str (interpose " " rest)) \newline))))
 
 
 (defn log-console
   "Log a messages that is of interest for every connected console.
   Printlns have the same effect."
-  [msg & rest]
-  (async/put! consolec (str msg " " (apply str (interpose " " rest)) \newline)))
+  [& rest]
+  (async/put! consolec (str (apply str (interpose " " rest)) \newline)))
 
 
 (defn log-all
   "Log a messages that is of interest for both every console as well
   as the command issuer."
-  [commandc msg & rest]
-  (apply log-command commandc msg rest)
-  (apply log-console msg rest))
+  [commandc & rest]
+  (apply log-command commandc rest)
+  (apply log-console rest))
 
 
 ;;; Redirect STDOUT messages to console channel.
