@@ -113,7 +113,7 @@
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :fs)
             manager (require-system Manager systems)]
-        (println "Starting filesystem deploymer, using config" config "...")
+        (println "Starting filesystem deployer, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
         (let [dir (file (:deployments config))]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
