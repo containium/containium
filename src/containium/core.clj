@@ -18,10 +18,10 @@
             [containium.systems.repl :as repl]
             [containium.utils.async :as async-util]
             [containium.exceptions :as ex]
+            [containium.commands :as commands]
+            [containium.logging :as logging]
             [clojure.java.io :refer (resource as-file)]
-            [clojure.string :refer (split trim)]
-            [clojure.tools.nrepl.server :as nrepl]
-            [clojure.pprint :refer (pprint print-table)])
+            [clojure.tools.nrepl.server :as nrepl])
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask])
   (:gen-class))
@@ -39,91 +39,6 @@
 
 ;;; Command loop.
 
-(defmulti handle-command
-  "This multi-method dispatches on the command argument. It also
-  receives the command arguments and the systems map. The result of this command is ignored."
-  (fn [command args systems] command))
-
-
-(defmethod handle-command :default
-  [command _ _]
-  (println "Unknown command:" command)
-  (println "Type 'help' for info on the available commands."))
-
-
-(defmethod handle-command "help"
-  [_ _ _]
-  (println (str "Available commands are:"
-                "\n"
-                "\n module <list|describe|activate|deactivate|kill|versions> [name [path]]"
-                "\n   Prints a list of installed modules, describes what is known of a module by"
-                "\n   name, activates (deploy/redeploy/swap) a module by name and path, or "
-                "\n   deactivates (undeploy) a module by name. Paths can point to a directory or"
-                "\n   to a JAR file. Killing a module is also possible, which forces the"
-                "\n   module to a halt, whatever its state. The versions actions shows the"
-                "\n   *-Version MANIFEST data in the classpath of the module."
-                "\n"
-                "\n repl <start|stop> [port]"
-                "\n   Starts an nREPL at the specified port, or stops the current one, inside"
-                "\n   the containium."
-                "\n"
-                "\n shutdown"
-                "\n   Stops all boxes and systems gracefully."
-                "\n"
-                "\n threads"
-                "\n   Prints a list of all threads.")))
-
-
-(defmethod handle-command "repl"
-  [_ args systems]
-  (let [[action port-str] args]
-    (case action
-      "start" (if port-str
-                (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
-                  (repl/open-repl (:repl systems) port)
-                  (println "Invalid port number:" port-str))
-                (repl/open-repl (:repl systems)))
-      "stop" (repl/close-repl (:repl systems))
-      (println (str "Unknown action '" action "', please use 'start' or 'stop'.")))))
-
-
-(defmethod handle-command "threads"
-  [_ _ _]
-  (let [threads (keys (Thread/getAllStackTraces))]
-    (println (apply str "Current threads (" (count threads) "):\n  "
-                    (interpose "\n  " threads)))))
-
-
-(defmethod handle-command "module"
-  [_ args systems]
-  (let [[action name path] args
-        timeout (* 1000 60)]
-    (case action
-      "list" (print-table (modules/list-installed (:modules systems)))
-
-      "activate" (if name
-                   (modules/activate! (:modules systems) name
-                                      (when path (modules/module-descriptor (as-file path)))
-                                      (async-util/console-channel name))
-                   (println "Missing name argument."))
-
-      "deactivate" (if name
-                     (modules/deactivate! (:modules systems) name (async-util/console-channel name))
-                     (println "Missing name argument."))
-
-      "kill" (if name
-               (modules/kill! (:modules systems) name (async-util/console-channel name))
-               (println "Missing name argument."))
-
-      "versions" (if name
-                   (modules/versions (:modules systems) name)
-                   (println "Missing name argument"))
-
-      (if action
-        (println (str "Unknown action '" action "', see help."))
-        (println "Missing action argument, see help.")))))
-
-
 (defn command-loop
   "This functions starts the command loop. It uses the handle-command
   multi-method for handling the individual commands (except shutdown).
@@ -133,14 +48,12 @@
   [systems]
   (let [jline (ConsoleReader.)]
     (loop []
-      (let [[command & args] (map (fn [[normal quoted]] (or quoted normal))
-                                  (re-seq #"'([^']+)'|[^\s]+"
-                                          (trim (.readLine jline "containium> "))))]
+      (let [[command & args] (commands/parse-quoted (.readLine jline "containium> "))]
         (case command
           nil (recur)
           "shutdown" nil
           (do (try
-                (handle-command command args systems)
+                (commands/handle-command command args systems (logging/stdout-logger))
                 (catch Throwable t
                   (ex/exit-when-fatal t)
                   (println "Error handling command" command ":")
@@ -148,7 +61,7 @@
               (recur)))))))
 
 
-(defmacro command [cmd & args]
+#_(defmacro command [cmd & args]
   "Call console commands from the REPL. For example:
   (command module versions foo)."
   (let [cmd (str cmd)

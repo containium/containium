@@ -7,7 +7,7 @@
             [containium.systems.config :as config :refer (Config)]
             [containium.deployer :refer :all]
             [containium.modules :as modules :refer (Manager)]
-            [clojure.string :refer (trim)]
+            [containium.commands :as commands]
             [clojure.java.io :refer (as-file)]
             [clojure.core.async :as async :refer (<! >!)])
   (:import [org.jboss.netty.channel SimpleChannelHandler ChannelHandlerContext MessageEvent Channel
@@ -28,7 +28,7 @@
   (if (instance? containium.modules.Response msg)
     (do (when-let [status (:status msg)] (.write nettyc (str "STATUS " (name status) \newline)))
         (.write nettyc (str (if (:success? msg) "SUCCESS" "FAILED") \newline)))
-    (.write nettyc (str msg \newline))))
+    (.write nettyc msg)))
 
 
 (defn handler-loop
@@ -51,51 +51,18 @@
 
 ;;; The message handler for Netty server.
 
-(defn close-with-error
-  [commc ^String msg status]
-  (async/go
-   (>! commc msg)
-   (>! commc (Response. false status))
-   (async/close! commc)))
-
-
 (defn handler
-  [manager ^ChannelGroup channels]
+  [systems ^ChannelGroup channels]
   (proxy [SimpleChannelHandler] []
     (channelOpen [^ChannelHandlerContext ctx ^ChannelStateEvent evt]
       (.add channels (.getChannel evt)))
 
     (messageReceived [^ChannelHandlerContext ctx ^MessageEvent evt]
       (let [^String msg (.getMessage evt)
-            [command & args] (map (fn [[normal quoted]] (or quoted normal))
-                                  (re-seq #"'([^']+)'|[^\s]+" (trim msg)))
-            commc (handler-loop ^Channel (.getChannel evt))]
-        (when command ;; ignore empty lines
-          (case (.toLowerCase ^String command)
-            "activate"
-            (let [[name path] args]
-              (if name
-                (do (println "Received activate action from socket deployer for module" name)
-                    (modules/activate! manager name
-                                       (when path (modules/module-descriptor (as-file path)))
-                                       commc))
-                (close-with-error commc "Missing name argument." nil)))
-
-            "deactivate"
-            (let [[name] args]
-              (if name
-                (do (println "Received deactivate action from socket deployer for module" name)
-                    (modules/deactivate! manager name commc))
-                (close-with-error commc "Missing name argument." nil)))
-
-            "kill"
-            (let [[name] args]
-              (if name
-                (do (println "Received kill action from socket deployer for module" name)
-                    (modules/kill! manager name commc))
-                (close-with-error commc "Missing name argument." nil)))
-
-            (close-with-error commc (str "Unkown command: " command) nil)))))))
+            [command & args] (commands/parse-quoted msg)]
+        (when command
+          ;;---TODO Restore returning #containium.modules/Response on incorrect command?
+          (commands/handle-command command args systems (handler-loop (.getChannel evt))))))))
 
 
 ;;; Creation of Netty server and socket system.
@@ -147,9 +114,8 @@
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :socket)
             _ (println "Starting socket-based module deployer, using config:" config)
-            manager (require-system Manager systems)
             channels (DefaultChannelGroup. "containium management")
-            handler (handler manager channels)
+            handler (handler systems channels)
             {:keys [server-factory server-channel]} (netty-server (:port config) handler)]
         (println "Socket-based module deployer started.")
         (SocketDeployer. server-factory server-channel channels config)))))

@@ -7,7 +7,6 @@
             [containium.systems.config :as config :refer (Config)]
             [containium.modules :as modules :refer (Manager)]
             [containium.deployer.watcher :as watcher]
-            [containium.utils.async :as async-util]
             [clojure.java.io :refer (file as-file)]
             [clojure.core.async :as async :refer (<!)]
             [clojure.edn :as edn])
@@ -44,7 +43,10 @@
                (println "Activating" name "by filesystem event.")
                (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
                  (->> (modules/activate! manager name descriptor)
-                      (async-util/console-channel name)))
+                      (async/remove< (constantly true))
+                      ;;---TODO Improve above sink. Command-only messages now get lost. Problem is,
+                      ;;        many messages are also send to the console channel...
+                      ))
                (catch Exception ex
                  (println "Could not activate" name "-" ex)))
              (println "Could not find" (str file) "in deployments directory."))))
@@ -53,7 +55,7 @@
      (try
        (println "Deactivating" filename "by filesystem event.")
        (->> (modules/deactivate! manager filename)
-            (async-util/console-channel filename))
+            (async/remove< (constantly true)))
        (catch Exception ex
          (println "Could not deactivate" filename "-" ex))))))
 
@@ -96,7 +98,7 @@
         (println "Filesystem deployer now bootstrapping module" (str file))
         (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
           (->> (modules/activate! manager name descriptor)
-               (async-util/console-channel name)))
+               (async/remove< (constantly true))))
         (catch Exception ex
           (println "Could not activate" name "-" ex)))))
 

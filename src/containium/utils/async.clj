@@ -4,18 +4,38 @@
 
 (ns containium.utils.async
   "Utils for core.async library."
-  (:require [clojure.core.async :as async :refer (<!)]))
+  (:require [clojure.core.async :as async :refer (<!)])
+  (:import [java.io OutputStream FilterOutputStream]))
 
 
-(defn console-channel
-  "Creates a go loop that consumes from a channel and prints the
-  contents of to *out*, until the channel closes. Returns the channel
-  consumed. Optionally, one can supply the channal to comsume."
-  ([prefix]
-     (console-channel prefix (async/chan)))
-  ([prefix channel]
-     (async/go-loop []
-       (when-let [msg (<! channel)]
-         (println (str "[" prefix "]") msg)
-         (recur)))
-     channel))
+;;---TODO Replace these with a better performing Java/gen-class implementation.
+
+(defn eavesdrop-outputstream
+  "Eavesdrop an OutputStream. The given or created channel receives
+   the following tuples: [bytes offset length], [bytes nil nil] or
+   [int nil nil]. Returns a tuple with the proxied OutputStream and
+   the channel."
+  ([^OutputStream os]
+     (eavesdrop-outputstream os (async/chan)))
+  ([^OutputStream os chan]
+     [(proxy [FilterOutputStream] [os]
+         (write [b off len]
+           (async/put! chan [b off len])
+           (if (and off len)
+             (.write os b off len)
+             (.write os b))))
+      chan]))
+
+
+(defn forwarding-outputstream
+  "Create a forwarding OutputStream. The given or created channel
+   receives the following tuples: [bytes offset length], [bytes nil
+   nil] or [int nil nil]. Returns a tuple with the OutputStream and
+   the channel."
+  ([]
+     (forwarding-outputstream (async/chan)))
+  ([chan]
+     [(proxy [OutputStream] []
+        (write [b off len]
+          (async/put! chan [b off len])))
+      chan]))

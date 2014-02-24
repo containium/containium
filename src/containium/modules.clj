@@ -9,8 +9,10 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring upstart-box remove-box)]
             [containium.modules.boxes :refer (start-box stop-box)]
+            [containium.logging :refer (log-command log-console log-all)]
             [clojure.edn :as edn]
-            [clojure.core.async :as async :refer (<!!)])
+            [clojure.core.async :as async :refer (<!!)]
+            [clojure.stacktrace :refer (print-cause-trace)])
   (:import [containium.systems Startable Stoppable]
            [java.io File]
            [java.net URL]
@@ -62,11 +64,14 @@
     management events. Please untap or close taps when they won't be
     read from anymore.")
 
-  (versions [this name]
+  (versions [this name] [this name channel]
     "Prints the *-Version MANIFEST entries it can find in the classpath
     of the module. The following keys are filtered out:
     Manifest-Version Implementation-Version Ant-Version
-    Specification-Version Archiver-Version Bundle-Version"))
+    Specification-Version Archiver-Version Bundle-Version. Returns an
+    async channel on which the response messages are put. Optionally,
+    one can supply this channel. The channel is closed after the
+    printing of the versions."))
 
 
 (defn module-descriptor
@@ -103,8 +108,8 @@
 
 (defn- agent-error-handler
   [agent ^Exception exception]
-  (println "Exception in module agent:")
-  (.printStackTrace exception))
+  (log-console "Exception in module agent:")
+  (log-console (with-out-str (print-cause-trace exception))))
 
 
 (defn- new-agent
@@ -122,17 +127,12 @@
      (async/put! (:event-chan manager) (Event. type name data))))
 
 
-(defn- channel-logger
-  [channel]
-  (fn [& msgs] (async/put! channel (apply str (interpose " " msgs)))))
-
-
 ;;; Agent processing functions.
 
 (defn- finish-action
   [{:keys [name error status] :as module} manager channel]
   (let [response (Response. (not error) status)]
-    (async/put! channel response)
+    (log-command channel response)
     (async/close! channel)
     (fire-event manager :finished name response)
     (assoc module :error false)))
@@ -143,8 +143,7 @@
      (update-status module manager channel success-state nil))
   ([{:keys [name error] :as module} manager channel success-state error-state]
      (let [status (if error error-state success-state)]
-       (async/put! channel (str "Module '" name "' status has changed to "
-                                (clojure.core/name status) "."))
+       (log-all channel (str "Module '" name "' status has changed to " (clojure.core/name status) "."))
        (fire-event manager :status name status)
        (assoc module :status status))))
 
@@ -152,7 +151,7 @@
 (defn- do-deploy
   [{:keys [name descriptor error] :as module} manager channel new-descriptor]
   (if-not error
-    (let [log (channel-logger channel)]
+    (let [log (partial log-all channel)]
       (if-let [descriptor (or new-descriptor descriptor)]
         (try
           (let [{:keys [containium profiles] :as descriptor} (assoc descriptor :name name)
@@ -170,7 +169,7 @@
               ;; else if box failed to start.
               (throw (Exception. (str "Box " name " failed to start.")))))
           (catch Throwable ex
-            (.printStackTrace ex)
+            (log-console (with-out-str (print-cause-trace ex)))
             (log (str "Module '" name "' failed to deploy: " (.getMessage ex)))
             (assoc module :error true :descriptor descriptor)))
         (do (log (str "Module '" name "' is new to containium, initial descriptor required."))
@@ -182,7 +181,7 @@
   ([module manager channel]
      (do-undeploy module manager channel nil))
   ([{:keys [name box ring-name error] :as module} manager channel old]
-     (let [log (channel-logger channel)]
+     (let [log (partial log-all channel)]
        (if-not error
          (if (do (when (-> (or (:box old) box) :project :containium :ring)
                    (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name) log))
@@ -202,7 +201,7 @@
   (let [agent (or agent (new-agent manager name))]
     (case (:status @agent)
       :undeployed
-      (do (async/put! channel (str "Planning deployment action for module '" name "'..."))
+      (do (log-all channel (str "Planning deployment action for module '" name "'..."))
           (send-off agent update-status manager channel :deploying)
           (await agent)
           (send-off agent do-deploy manager channel descriptor)
@@ -212,7 +211,7 @@
       :deployed
       (if (-> @agent :box :descriptor :containium :swappable?)
         (let [before-swap-state @agent]
-          (async/put! channel (str "Planning swap action for module '" name "'..."))
+          (log-all channel (str "Planning swap action for module '" name "'..."))
           (send-off agent update-status manager channel :swapping)
           (await agent)
           (send-off agent do-deploy manager channel descriptor)
@@ -220,7 +219,7 @@
           (send-off agent update-status manager channel :deployed :deployed)
           (send-off agent finish-action manager channel))
         (do
-          (async/put! channel (str "Planning redeploy action for module '" name "'..."))
+          (log-all channel (str "Planning redeploy action for module '" name "'..."))
           (send-off agent update-status manager channel :redeploying)
           (await agent)
           (send-off agent do-undeploy manager channel)
@@ -232,7 +231,7 @@
 (defn- deactivate-action
   [manager name agent channel]
   (fire-event manager :deactivate name)
-  (async/put! channel (str "Planning undeployment action for module '" name "'..."))
+  (log-all channel (str "Planning undeployment action for module '" name "'..."))
   (send-off agent update-status manager channel :undeploying)
   (await agent)
   (send-off agent do-undeploy manager channel)
@@ -243,7 +242,7 @@
 (defn- kill-action
   [{:keys [systems agents] :as manager} agent channel]
   (let [{:keys [box name status]} @agent
-        log (channel-logger channel)]
+        log (partial log-all channel)]
     (fire-event manager :kill name)
     (log (str "Killing module '" name "'..."))
     (swap! agents dissoc name)
@@ -252,7 +251,7 @@
         (remove-box (:ring systems) (:ring-name name) log))
       (stop-box name box log))
     (log (str "Module '" name "' successfully killed."))
-    (async/put! channel (Response. true nil))
+    (log-command channel (Response. true nil))
     (async/close! channel)))
 
 
@@ -275,16 +274,16 @@
 
                agent
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
-                   (async/put! channel (str "Cannot " (clojure.core/name command) " module '" name
+                   (log-command channel (str "Cannot " (clojure.core/name command) " module '" name
                                             "' while its " (clojure.core/name status)))
-                   (async/put! channel (Response. false status))
+                   (log-command channel (Response. false status))
                    (async/close! channel))
 
                :else
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
-                   (async/put! channel (str "No module named '" name "' is known. "
+                   (log-command channel (str "No module named '" name "' is known. "
                                             "Activate it first."))
-                   (async/put! channel (Response. false nil))
+                   (log-command channel (Response. false nil))
                    (async/close! channel)))))
      channel))
 
@@ -292,7 +291,7 @@
 (defn- deactivate-all
   [manager names]
   (let [timeout (async/timeout 90000)   ;;---TODO Make this configurable?
-        initial (into {} (for [name names] [(action :deactivate manager name (async/chan)) name]))]
+        initial (into {} (for [name names] [(deactivate! manager name) name]))]
     (<!! (async/go-loop [channel+names initial]
            (if-not (empty? channel+names)
              (let [[val channel] (async/alts! (conj (vec (keys channel+names)) timeout))
@@ -303,22 +302,27 @@
                        (async/close! channel))
                      false)
                  ;; Action channel message
-                 (if (instance? containium.modules.Response val)
-                   (if (= (:status val) :undeployed)
-                     ;; Succesfully undeployed, remove this channel.
-                     (recur (dissoc channel+names channel))
-                     ;; Failed to undeploy, schedule another deactivate.
-                     (recur (assoc (dissoc channel+names channel)
-                              (action :deactivate manager name (async/chan)) name)))
-                   ;; Ordinary message, just print it.
-                   (do (println "Modules shutdown:" val)
-                       (recur channel+names)))))
+                 (cond
+                  ;; Respones message.
+                  (instance? containium.modules.Response val)
+                  (if (= (:status val) :undeployed)
+                    ;; Succesfully undeployed, remove this channel.
+                    (recur (dissoc channel+names channel))
+                    ;; Failed to undeploy, schedule another deactivate.
+                    (recur (assoc (dissoc channel+names channel)
+                             (deactivate! manager name) name)))
+                  ;; Closed action channel, ignore it and remove it.
+                  (nil? val)
+                  (recur (dissoc channel+names channel))
+                  ;; Ordinary message, ignore it.
+                  :else
+                  (recur channel+names))))
              ;; No more channels, which means all are undeployed.
              true)))))
 
 
 (defn- versions*
-  [module]
+  [module channel]
   (if-let [^ClassLoader box-cl (-> module :box :box-cl)]
     (doseq [^URL resource (Collections/list (.getResources box-cl "META-INF/MANIFEST.MF"))]
       (with-open [stream (.openStream resource)]
@@ -334,8 +338,9 @@
                                                        "Bundle-Version"} name)))))
                                       (.entrySet (.getMainAttributes mf)))]
           (doseq [^Map$Entry entry version-entries]
-            (println (.. entry getKey toString) ":" (.getValue entry))))))
-    (println "Module" (:name module) "not running.")))
+            (log-command channel (.. entry getKey toString) ":" (.getValue entry))))))
+    (log-command channel "Module" (:name module) "not running."))
+  (async/close! channel))
 
 
 (defrecord DefaultManager [config systems agents event-chan event-mult]
@@ -367,10 +372,15 @@
   (event-mult [this]
     event-mult)
 
-  (versions [_ name]
+  (versions [this name]
+    (versions this name (async/chan)))
+
+  (versions [_ name channel]
     (if-let [agent (@agents name)]
-      (versions* @agent)
-      (println "No module named" name "known.")))
+      (versions* @agent channel)
+      (do (log-command channel "No module named" name "known.")
+          (async/close! channel)))
+    channel)
 
   Stoppable
   (stop [this]
