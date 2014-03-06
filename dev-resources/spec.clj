@@ -16,7 +16,7 @@
  :cassandra {:config-file "cassandra.yaml"}
  :alia {:contact-points ["localhost"]
         :port 9042}
- :session-store {:ttl 1}
+ :session-store {:ttl 60}
  :kafka {:server {:port 9090
                   :broker.id 1
                   :log.dir "target/kafka-log"
