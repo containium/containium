@@ -22,6 +22,7 @@
                  [org.apache.kafka/kafka_2.9.2 "0.8.1"]
                  [com.taoensso/nippy "2.5.2"]
                  [org.clojure/core.cache "0.6.3"]
+                 [org.clojars.touch/elasticsearch-lang-clojure "0.1.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
