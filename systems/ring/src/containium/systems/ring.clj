@@ -54,7 +54,7 @@
   "Evaluates to a match form, used by the make-app function."
   [{:keys [host-regex context-path]} uri-sym host-sym]
   (let [host-test `(re-matches ~(if host-regex (re-pattern host-regex)) ~host-sym)
-        context-test `(and (.startsWith ~uri-sym ~context-path)
+        context-test `(and (.startsWith (str ~uri-sym) ~context-path)
                            (= (get ~uri-sym ~(count context-path)) \/))]
     `(and ~@(remove nil? (list (when host-regex host-test)
                                (when context-path context-test))))))
