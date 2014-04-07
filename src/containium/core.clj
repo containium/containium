@@ -32,7 +32,12 @@
 (defmacro eval-in
   "Evaluate the given `forms` (in an implicit do) in the module identified by `name`."
   [name & forms]
-  `@(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name)) '(do ~@forms)))
+
+  (let [box @(get @(get-in systems [:modules :agents]) name)]
+    (assert box (str "Module not found: " name))
+    `@(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
+                        '(try (do ~@forms)
+                              (catch Throwable e# (do (.printStackTrace e#) e#))))))
 
 
 ;;; Command loop.
