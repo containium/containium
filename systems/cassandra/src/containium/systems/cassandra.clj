@@ -7,7 +7,7 @@
   (:refer-clojure :exclude [replace])
   (:require [clojure.java.io :refer (copy)]
             [clojure.string :refer (replace split)])
-  (:import [containium ByteBufferInputStream]
+  (:import [org.apache.cassandra.utils ByteBufferUtil]
            [java.io ByteArrayOutputStream]
            [java.nio ByteBuffer]
            [java.util Arrays]))
@@ -59,7 +59,7 @@
 (defn bytebuffer->inputstream
   "Returns an InputStream reading from a ByteBuffer."
   [^ByteBuffer bb]
-  (ByteBufferInputStream. bb))
+  (ByteBufferUtil/inputStream bb))
 
 
 (defn bytebuffer->bytes
