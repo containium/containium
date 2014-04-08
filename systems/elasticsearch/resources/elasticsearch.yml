@@ -175,7 +175,7 @@ path.data: target/elasticsearch/data
 
 # Path to where plugins are installed:
 #
-# path.plugins: /path/to/plugins
+path.plugins: dev-resources/plugins
 
 
 #################################### Plugin ###################################
