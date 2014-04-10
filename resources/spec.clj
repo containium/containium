@@ -26,7 +26,6 @@
  :elastic {}
  :modules {:resolve-dependencies true
            :isolates ["containium.*"
-                      "org\\.httpkit.*"
                       "taoensso\\.nippy.*"
                       "ring.*"
                       "leiningen.*"
@@ -42,6 +41,9 @@
                       "taoensso.nippy.*"
                       "potemkin.*"
                       "flatland.*"
-                      "useful.*"]}
+                      "useful.*"
+                      ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
+                      ;; Keep this in mind when seeking leaks. :)
+                      "org\\.httpkit\\.(?!server\\.AsyncChannel).*"]}
  :repl {:port 13337}
  :fs {:deployments "dev-resources/deployments"}}
