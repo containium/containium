@@ -12,7 +12,7 @@
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
-                 [http-kit "2.1.10"]
+                 [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
                  [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
                  [io.netty/netty "3.7.0.Final"]
@@ -29,7 +29,8 @@
                  [cc.qbits/alia "1.9.2"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
-  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
+               javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
   :main containium.core
   :aot [containium.core]
