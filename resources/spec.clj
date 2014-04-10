@@ -20,6 +20,7 @@
  :kafka {:server {:port 9090
                   :broker.id 1
                   :message.max.bytes 16777216
+                  :replica.fetch.max.bytes 16777216
                   :log.dir "target/kafka-log"
                   :zookeeper.connect "localhost"}}
  :elastic {}
