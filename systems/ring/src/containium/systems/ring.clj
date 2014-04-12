@@ -84,15 +84,16 @@
                                      (or ~@(for [index (range (count sorted))
                                                  :let [app (get sorted index)]]
                                              `(when (matcher ~(:ring-conf app) ~'uri ~'host)
-                                                (let [~'app (get ~'sorted ~index)]
+                                                (let [~'app (~'sorted ~index)]
                                                   (boxure/call-in-box
                                                    (:box ~'app)
                                                    (:handler-fn ~'app)
                                                    ~(if-let [cp (-> app :ring-conf :context-path)]
                                                       `(update-in ~'request [:uri]
                                                                   #(subs % ~(count cp)))
-                                                      'request))))))))]
-                    (partial (eval fn-form) sorted))
+                                                      'request))))))))
+                        handler (eval fn-form)]
+                    (fn [request] (handler sorted request)))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (wrap-try-catch handler)))
 
