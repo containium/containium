@@ -47,7 +47,7 @@
       (catch Throwable ex#
         (ex/exit-when-fatal ex#)
         (println "Exception while running `with-systems` body. Stopping systems.")
-        (.printStackTrace ex#)))))
+        (throw ex#)))))
 
 
 (defmacro with-systems
