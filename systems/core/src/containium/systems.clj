@@ -23,31 +23,52 @@
   (stop [this]))
 
 
+(defn- start-systems
+  [system-components]
+  (loop [to-start system-components
+         started nil]
+    (if-let [[name system] (first to-start)]
+      (let [result (if (satisfies? Startable system)
+                      (try
+                        (start system (into {} started))
+                        (catch Throwable ex
+                          (ex/exit-when-fatal ex)
+                          ex))
+                      system)]
+        (if-not (instance? Throwable result)
+          (recur (rest to-start) (conj started [name result]))
+          (do (println "Exception while starting system component" name "-" result)
+              (.printStackTrace ^Throwable result)
+              [started result])))
+      [started nil])))
+
+
+(defn- stop-systems
+  [started-components]
+  (doseq [[name system] started-components]
+    (when (satisfies? Stoppable system)
+      (try
+        (stop system)
+        (catch Throwable ex
+          (ex/exit-when-fatal ex)
+          (println "Exception while stopping system component" name "-" ex)
+          (.printStackTrace ex))))))
+
+
 (defmacro with-systems*
   [symbol system-components body]
-  (if-let [[name system] (first system-components)]
-    `(try
-       (let [system# ~system
-             system# (if (satisfies? Startable system#) (start system# ~symbol) system#)
-             ~symbol (assoc ~symbol ~name system#)]
-         (with-systems* ~symbol ~(rest system-components) ~body)
-         (when (satisfies? Stoppable system#)
-           (try
-             (stop system#)
-             (catch Throwable ex#
-               (ex/exit-when-fatal ex#)
-               (println "Exception while stopping system component" ~name "-" ex#)
-               (.printStackTrace ex#)))))
-       (catch Throwable ex#
-         (ex/exit-when-fatal ex#)
-         (println "Exception while starting system component" ~name "-" ex#)
-         (.printStackTrace ex#)))
-    `(try
-      ~@body
-      (catch Throwable ex#
-        (ex/exit-when-fatal ex#)
-        (println "Exception while running `with-systems` body. Stopping systems.")
-        (throw ex#)))))
+  `(let [[started# ex#] (#'start-systems ~system-components)
+         ex# (if ex#
+               ex#
+               (try
+                 (let [~symbol (into {} started#)] ~@body nil)
+                 (catch Throwable ex#
+                   (ex/exit-when-fatal ex#)
+                   (println "Exception while running `with-systems` body. Stopping systems.")
+                   (.printStackTrace ex#)
+                   ex#)))]
+     (#'stop-systems started#)
+     (when ex# (throw ex#))))
 
 
 (defmacro with-systems
@@ -63,8 +84,7 @@
   [symbol system-components & body]
   (assert (even? (count system-components))
           "System components vector needs to have an even number of forms.")
-  `(let [~symbol {}]
-     (with-systems* ~symbol ~(partition 2 system-components) ~body)))
+  `(with-systems* ~symbol (partition 2 ~system-components) ~body))
 
 
 (defn require-system
