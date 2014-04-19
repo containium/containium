@@ -13,22 +13,23 @@
             [clojure.java.io :as io]))
 
 
-(defn run [spec containium-map]
-  (prn "Ring handler: " (-> containium-map :ring :handler))
+(defn run [spec {:keys [start stop ring profiles active-profiles dev?]
+                 :or {:profiles [dev provided user system base]
+                      :active-profiles [dev provided user system base]
+                      :dev? true}
+                 :as containium-map}]
   (with-systems systems [:config (map-config spec)
                          :repl repl/nrepl
                          :session-store (memory-store)
-                         :ring (test-http-kit (-> containium-map :ring :handler))
+                         :ring (test-http-kit (-> ring :handler))
                          :elastic elastic/embedded
                          :cassandra cassandra/embedded12]
-    (let [start-fn (:start containium-map)
-          stop-fn (:stop containium-map)]
-      (start-fn systems
-                {:file (io/as-file ".")
-                 :profiles []
-                 :active-profiles []
-                 :dev? true
-                 :containium containium-map})
-      (read-line)
-      (stop-fn systems)))
+    (start systems
+           {:file (io/as-file ".")
+            :profiles profiles
+            :active-profiles active-profiles
+            :dev? (:dev? containium-map true)
+            :containium containium-map})
+    (read-line)
+    (stop systems))
   (shutdown-agents))

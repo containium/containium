@@ -42,7 +42,7 @@ index:
 # Cluster name identifies your cluster for auto-discovery. If you're running
 # multiple clusters on the same network, make sure you're using unique names.
 #
-cluster.name: elasticsearch_torquebox
+cluster.name: containium
 
 
 #################################### Node #####################################
@@ -50,7 +50,7 @@ cluster.name: elasticsearch_torquebox
 # Node names are generated dynamically on startup, so you're relieved
 # from configuring them manually. You can tie this node to a specific name:
 #
-node.name: "Carmel"
+node.name: "Containium"
 
 # Every node can be configured to allow or deny being eligible as the master,
 # and to allow or deny to store the data.
@@ -157,7 +157,7 @@ node.name: "Carmel"
 
 # Path to directory where to store index data allocated for this node.
 #
-path.data: /opt/elasticsearch/data
+path.data: target/elasticsearch/data
 #
 # Can optionally include more than one location, causing data to be striped across
 # the locations (a la RAID 0) on a file level, favouring locations with most free
@@ -175,7 +175,7 @@ path.data: /opt/elasticsearch/data
 
 # Path to where plugins are installed:
 #
-# path.plugins: /path/to/plugins
+path.plugins: dev-resources/plugins
 
 
 #################################### Plugin ###################################
@@ -211,12 +211,14 @@ bootstrap.mlockall: true
 
 # Set the bind address specifically (IPv4 or IPv6):
 #
-# network.bind_host: 192.168.0.1
+network.bind_host: localhost
 
 # Set the address other nodes will use to communicate with this node. If not
 # set, it is automatically derived. It must point to an actual IP address.
 #
-network.publish_host: 0.0.0.0
+
+network.publish_host: localhost
+
 
 # Set both 'bind_host' and 'publish_host':
 #
@@ -329,12 +331,12 @@ network.publish_host: 0.0.0.0
 #
 # 1. Disable multicast discovery (enabled by default):
 #
-# discovery.zen.ping.multicast.enabled: false
+discovery.zen.ping.multicast.enabled: false
 #
 # 2. Configure an initial list of master nodes in the cluster
 #    to perform discovery when new nodes (master or data) are started:
 #
-# discovery.zen.ping.unicast.hosts: ["host1", "host2:port", "host3[portX-portY]"]
+discovery.zen.ping.unicast.hosts: ["localhost"]
 
 # EC2 discovery allows to use AWS EC2 API in order to perform discovery.
 #

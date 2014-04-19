@@ -12,23 +12,25 @@
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
-                 [http-kit "2.1.10"]
+                 [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.2.3"]
                  [io.netty/netty "3.9.0.Final"]
                  [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
-                 [org.apache.kafka/kafka_2.9.2 "0.8.0"]
+                 [org.apache.kafka/kafka_2.9.2 "0.8.0"] ;; 0.8.1 Has a bug during shutdown.
                  [com.taoensso/nippy "2.5.2"]
                  [org.clojure/core.cache "0.6.3"]
+                 [org.clojars.touch/elasticsearch-lang-clojure "0.1.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
                  [cc.qbits/alia "1.9.2"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
-  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
+               javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
   :main containium.core
   :aot [containium.core]
