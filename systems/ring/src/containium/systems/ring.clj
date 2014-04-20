@@ -96,8 +96,9 @@
     (wrap-try-catch handler)))
 
 
-(defn- clean-ring-conf
-  "Updates the ring-conf, in order to ensure some properties of the values."
+(defn clean-ring-conf
+  "Updates the ring-conf, in order to ensure some properties of the values.
+   - Makes sure the context-path does not end with a / character."
   [ring-conf]
   (let [result ring-conf
         result (update-in result [:context-path]

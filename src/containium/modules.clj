@@ -7,7 +7,7 @@
   (:require [containium.exceptions :as ex]
             [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.systems.ring :refer (Ring upstart-box remove-box)]
+            [containium.systems.ring :refer (Ring upstart-box remove-box clean-ring-conf)]
             [containium.modules.boxes :refer (start-box stop-box)]
             [clojure.edn :as edn]
             [clojure.core.async :as async :refer (<!!)])
@@ -149,13 +149,21 @@
        (assoc module :status status))))
 
 
+(defn clean-descriptor [descriptor name]
+  (->
+    (if (-> descriptor :containium :ring)
+        (update-in descriptor [:containium :ring] clean-ring-conf)
+       #_else descriptor)
+    (assoc :name name)))
+
+
 (defn- do-deploy
   [{:keys [name descriptor error] :as module} manager channel new-descriptor]
   (if-not error
     (let [log (channel-logger channel)]
       (if-let [descriptor (or new-descriptor descriptor)]
         (try
-          (let [{:keys [containium profiles] :as descriptor} (assoc descriptor :name name)
+          (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
                 boxure-config (-> (get-config (-> manager :systems :config) :modules)
                                   (assoc :profiles profiles))]
             ;; Try to start the box.
