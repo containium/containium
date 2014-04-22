@@ -67,9 +67,8 @@
            (let [name (:name msg)]
              (case (:type msg)
                :activate
-               (do (when-let [descriptor (:data msg)]
-                     (swap! descriptors assoc name (update-in descriptor [:file] str)))
-                   (spit (file dir name) (get @descriptors name)))
+               (when-let [descriptor (:data msg)]
+                 (swap! descriptors assoc name (update-in descriptor [:file] str)))
 
                :deactivate
                (.delete (file dir name))
@@ -81,7 +80,10 @@
                :kill
                (.delete (file dir name))
 
-               nil))
+               :finished
+               (let [response (:data msg)]
+                 (when (and (= :deployed (:status response)) (:success? response))
+                   (spit (file dir name) (get @descriptors name))))))
            (recur))))
      chan))
 

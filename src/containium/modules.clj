@@ -27,7 +27,7 @@
 ;;  :deactivate <name>
 ;;  :kill <name>
 ;;  :status <name> status-keyword
-;;  :finish <name> Response-record
+;;  :finished <name> Response-record
 (defrecord Event [type name data])
 
 
