@@ -21,7 +21,6 @@
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.0"] ;; 0.8.1 Has a bug during shutdown.
                  [com.taoensso/nippy "2.5.2"]
-                 [org.clojure/core.cache "0.6.3"]
                  [org.clojars.touch/elasticsearch-lang-clojure "0.1.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
