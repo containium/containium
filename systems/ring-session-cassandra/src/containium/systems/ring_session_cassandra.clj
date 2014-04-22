@@ -93,6 +93,7 @@
                        config "...")
             _ (ensure-schema cassandra)
             ttl-mins (:ttl-mins config)
+            _ (assert ttl-mins "Missing :ttl-mins config")
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             ;; TTL in the database queure is twice as what is configured, as unchanged session
             ;; data is only written once in TTL minutes to the database.
