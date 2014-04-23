@@ -97,7 +97,7 @@
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             ;; TTL in the database queure is twice as what is configured, as unchanged session
             ;; data is only written once in TTL minutes to the database.
-            write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* 2 ttl-mins)
+            write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* 2 60 ttl-mins)
                                             " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
         (println "Embedded Cassandra Ring session store started.")
