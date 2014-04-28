@@ -268,9 +268,9 @@
   ([command manager name channel]
      (action command manager name channel nil))
   ([command manager name channel args]
-     (let [agent (get @(:agents manager) name)
-           status (when agent (:status @agent))]
-       (locking (or agent (Object.))
+     (locking (.intern name)
+       (let [agent (get @(:agents manager) name)
+             status (when agent (:status @agent))]
          (cond (and (= command :activate) (or (nil? agent)
                                               (contains? #{:undeployed :deployed} status)))
                (activate-action manager name agent channel args)
