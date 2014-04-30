@@ -118,8 +118,13 @@
                              :let [{:keys [name arglists]} (val sig)]]
                          [(keyword name)
                           (eval `(fn ~@(for [arglist arglists]
-                                         `(~arglist (~(symbol (str "." (Compiler/munge (str name))))
-                                                     ~@arglist)))))])))
+                                         `(~arglist
+                                            ; Systems currently run in the root Classloader context
+                                            ; but this could be changed to isolated systems using
+                                            ; a different ns-root binding:
+                                            (binding [*ns-root* (.getRawRoot #'*ns-root*)]
+                                              (~(symbol (str "." (Compiler/munge (str name))))
+                                                         ~@arglist))))))])))
       (catch IllegalArgumentException iae))))
 
 

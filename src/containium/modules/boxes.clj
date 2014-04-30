@@ -47,7 +47,7 @@
               boxure-config (if-let [module-isolates (:isolates module-config)]
                               (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
                               #_else boxure-config)
-              box (boxure (assoc boxure-config :debug? false) (.getClassLoader clojure.lang.RT) file)
+              box (boxure (assoc boxure-config :debug? (System/getenv "BOXDEBUG")) (.getClassLoader clojure.lang.RT) file)
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
