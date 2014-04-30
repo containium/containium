@@ -25,7 +25,7 @@
                   :zookeeper.connect "localhost"}}
  :elastic {}
  :modules {:resolve-dependencies true
-           :isolates ["containium.*"
+           :isolates [;"containium.*"
                       "taoensso\\.nippy.*"
                       "ring.*"
                       "leiningen.*"
