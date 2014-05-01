@@ -196,9 +196,9 @@
                    (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name) log))
                  (stop-box name (or (:box old) box) log))
            (do (log (str "Module '" name "' successfully undeployed."))
-               module)
-           (do (log (str "Module '" name "' failed to undeployed."))
-               (assoc module :error true)))
+               (if old module (dissoc module :box)))
+           (do (log (str "Module '" name "' failed to undeploy."))
+               (-> (if old module (dissoc module :box)) (assoc :error true))))
          module))))
 
 
