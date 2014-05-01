@@ -268,7 +268,7 @@
   ([command manager name channel]
      (action command manager name channel nil))
   ([command manager name channel args]
-     (locking (.intern name)
+     (locking (.intern ^String name)
        (let [agent (get @(:agents manager) name)
              status (when agent (:status @agent))]
          (cond (and (= command :activate) (or (nil? agent)
