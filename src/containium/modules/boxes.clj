@@ -56,13 +56,9 @@
                                  :active-profiles active-profiles
                                  :containium module-config})
               start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
-                                              ~(:start module-config)))
-              forward-fn @(boxure/eval box '(do (require 'containium.systems)
-                                                containium.systems/forward-systems))]
+                                              ~(:start module-config)))]
           (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
-          (when (instance? Throwable forward-fn) (boxure/clean-and-stop box) (throw forward-fn))
           (try
-            (boxure/call-in-box box forward-fn systems)
             (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
               (println "Module" name "started.")
               (assoc box :start-result start-result, :descriptor descriptor))
