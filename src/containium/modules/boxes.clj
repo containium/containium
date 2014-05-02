@@ -48,7 +48,8 @@
                               (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
                               #_else boxure-config)
               box (boxure (assoc boxure-config :debug? (System/getenv "BOXDEBUG")) (.getClassLoader clojure.lang.RT) file)
-              _   (boxure/eval box '(clojure.lang.Namespace/injectFromRoot "containium\\.(?!core).*"))
+              injected @(boxure/eval box '(clojure.lang.Namespace/injectFromRoot "containium\\.(?!core).*"))
+              _ (dosync (commute (:loaded box) #(apply conj % (keys injected))))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
