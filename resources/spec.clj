@@ -27,7 +27,7 @@
  :modules {:resolve-dependencies true
            :isolates [;"containium.*"
                       "taoensso\\.nippy.*"
-                      "ring.*"
+                      "ring\\.(?!middleware).*"
                       "leiningen.*"
                       "robert.hooke"
                       "cemerick.pomegranate.*"
