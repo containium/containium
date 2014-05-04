@@ -90,5 +90,6 @@
         (ex/exit-when-fatal ex)
         (.printStackTrace ex))
       (finally
+        (boxure.BoxureClassLoader/cleanThreadLocals)
         (boxure/clean-and-stop box)
         (log-fn "Module" name "stopped.")))))
