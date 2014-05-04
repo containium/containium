@@ -49,8 +49,11 @@
                               #_else boxure-config)
               box-debug (System/getenv "BOXDEBUG")
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
-              injected @(boxure/eval box '(clojure.lang.Namespace/injectFromRoot "containium\\.(?!core).*|ring\\.middleware.*"))
-              _ (dosync (commute (:loaded box) #(apply conj % (keys injected))))
+              injected @(boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
+                                                          "containium\\.(?!core).*|ring\\.middleware.*")]
+                                            (dosync (commute @#'clojure.core/*loaded-libs*
+                                                             #(apply conj % (keys injected))))
+                                            injected))
               _ (when box-debug (prn "Loaded after namespace injection: " @(:loaded box)))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
