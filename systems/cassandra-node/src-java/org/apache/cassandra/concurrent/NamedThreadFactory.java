@@ -31,7 +31,7 @@ import java.security.AccessController;
 public class NamedThreadFactory implements ThreadFactory
 {
     static {
-        System.out.println("[!!] Successfully loaded Containium™ overridden class: " + EsExecutors.class);
+        System.out.println("[!!] Successfully loaded Containium™ overridden class: " + NamedThreadFactory.class);
     }
 
     protected final String id;

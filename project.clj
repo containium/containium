@@ -77,6 +77,10 @@
                                 [:phase "test"]
                                 [:goals [:goal "test"]]])}]
 
+                [org.apache.maven.plugins/maven-compiler-plugin "3.1"
+                 {:configuration ([:source "1.7"]
+                                  [:target "1.7"])}]
+
                 [org.codehaus.mojo/buildnumber-maven-plugin "1.2"
                  {:executions [:execution [:phase "validate"] [:goals [:goal "create"]]]
                   :configuration ([:doCheck "false"] ; Set to true to prevent packaging with local changes.
