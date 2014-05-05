@@ -54,7 +54,7 @@
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
                                             injected))
-              _ (when box-debug (prn "Loaded after namespace injection: " @(:loaded box)))
+              _ (when box-debug (prn "Loaded after namespace injection: " @(boxure/eval box @#'clojure.core/*loaded-libs*)))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
