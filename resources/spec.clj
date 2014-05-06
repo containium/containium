@@ -37,6 +37,7 @@
                       "qbits.*"
                       "clj.time.*"
                       "cljs.core.async.*"
+                      "clojure.core.async.*"
                       "lamina.*"
                       "taoensso.nippy.*"
                       "potemkin.*"
