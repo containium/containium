@@ -37,7 +37,7 @@
 
   (let [box @(get @(get-in systems [:modules :agents]) name)]
     (assert box (str "Module not found: " name))
-    `@(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
+    `(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
                         '(try (do ~@forms)
                               (catch Throwable e# (do (.printStackTrace e#) e#))))))
 

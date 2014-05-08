@@ -50,21 +50,21 @@
                               #_else boxure-config)
               box-debug (System/getenv "BOXDEBUG")
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
-              injected @(boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
+              injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
                                                           (str "containium\\.(?!core).*"
                                                                "|ring\\.middleware.*"
                                                                "|org\\.httpkit.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
                                             injected))
-              _ (when box-debug (prn "Loaded after namespace injection: " @(boxure/eval box @#'clojure.core/*loaded-libs*)))
+              _ (when box-debug (prn "Loaded after namespace injection: " (boxure/eval box @#'clojure.core/*loaded-libs*)))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
                                 {:project project
                                  :active-profiles active-profiles
                                  :containium module-config})
-              start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
+              start-fn (boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
                                               ~(:start module-config)))]
           (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
           (try
@@ -86,7 +86,7 @@
   (let [module-config (-> box :project :containium)]
     (log-fn "Stopping module" name "...")
     (try
-      (let [stop-fn @(boxure/eval box
+      (let [stop-fn (boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
                                        ~(:stop module-config)))]
         (boxure/call-in-box box stop-fn (:start-result box))

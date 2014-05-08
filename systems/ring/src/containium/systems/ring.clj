@@ -114,7 +114,7 @@
         _ (assert (:handler ring-conf)
                   (log-fn ":ring app config requires a :handler, but ring-conf only contains: "
                           ring-conf))
-        handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
+        handler-fn (boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))
         ;; Sorting value is the number of slashes in the context path and the time it is
         ;; deployed (actually, the time when this function is called). The more slashes and the
