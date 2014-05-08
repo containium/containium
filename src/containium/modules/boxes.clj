@@ -7,7 +7,8 @@
   (:require [boxure.core :refer (boxure) :as boxure]
             [leiningen.core.project]
             [clojure.core.async :as async]
-            [containium.exceptions :as ex]))
+            [containium.exceptions :as ex]
+            [containium.utils.session-store])) ; load session-store, because it is shared with boxes
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -50,7 +51,9 @@
               box-debug (System/getenv "BOXDEBUG")
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
               injected @(boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
-                                                          "containium\\.(?!core).*|ring\\.middleware.*")]
+                                                          (str "containium\\.(?!core).*"
+                                                               "|ring\\.middleware.*"
+                                                               "|org\\.httpkit.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
                                             injected))

@@ -45,7 +45,8 @@
                       "useful.*"
                       ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
                       ;; Keep this in mind when seeking leaks. :)
-                      "org\\.httpkit\\.(?!server\\.AsyncChannel).*"]}
+                      ;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
+                      ]}
  :repl {:port 13337}
  :fs {:deployments "deployments"}
  :socket {:port 9999
