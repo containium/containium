@@ -221,7 +221,7 @@
                               :http-kit http-kit/http-kit
                               :jetty9 jetty9/jetty9
                               :ring ring/distributed
-                              :session-store cass-session/embedded
+                              :session-store cass-session/default
                               :modules modules/default-manager
                               :fs deployer/directory
                               :socket socket/socket
