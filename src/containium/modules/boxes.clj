@@ -68,7 +68,7 @@
                                               ~(:start module-config)))]
           (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
           (try
-            (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
+            (let [start-result (boxure/call-in-box box (start-fn systems descriptor))]
               (println "Module" name "started.")
               (assoc box :start-result start-result, :descriptor descriptor))
             (catch Throwable ex
@@ -89,7 +89,7 @@
       (let [stop-fn (boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
                                        ~(:stop module-config)))]
-        (boxure/call-in-box box stop-fn (:start-result box))
+        (boxure/call-in-box box (stop-fn (:start-result box)))
         :stopped)
       (catch Throwable ex
         (log-fn "Exception while stopping module" name ":" ex)

@@ -85,11 +85,11 @@
                                                 (let [~'app (~'sorted ~index)]
                                                   (boxure/call-in-box
                                                    (:box ~'app)
-                                                   (:handler-fn ~'app)
+                                                   ((:handler-fn ~'app)
                                                    ~(if-let [cp (-> app :ring-conf :context-path)]
                                                       `(update-in ~'request [:uri]
                                                                   #(subs % ~(count cp)))
-                                                      'request))))))))
+                                                      'request)))))))))
                         handler (eval fn-form)]
                     (fn [request] (handler sorted request)))
                   (constantly {:status 503 :body "no apps loaded"}))]
