@@ -61,7 +61,7 @@
                                 (= data (read-session this key)))
                      (assoc data :containium/last-db-write (System/currentTimeMillis))
                      data)]
-      (when-not (= data new-write)
+      (when-not (= data new-data)
         (let [q (if (get-in data [:noir :session/longlived]) write-q-long write-q)]
           (write-session-data cassandra q new-key new-data)))
       new-key))
@@ -94,7 +94,7 @@
             ttl-mins (:ttl-mins config)
             ttl-days (:ttl-days config)
             _ (assert ttl-mins "Missing :ttl-mins config")
-            _ (assert ttl-mins-long "Missing :ttl-mins-long config")
+            _ (assert ttl-days "Missing :ttl-days config")
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             ;; TTL in the database queure is twice as what is configured, as unchanged session
             ;; data is only written once in TTL minutes to the database.
