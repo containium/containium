@@ -12,18 +12,18 @@
 (defn deep-merge
   "Like merge-with, but merges maps recursively."
   [& maps]
-  (apply
-   (fn m [& maps]
-     (if (every? map? maps)
-       (apply merge-with m maps)
-       (last maps)))
-   maps))
+  (apply merge-with
+         (fn m [& maps]
+           (if (every? map? maps)
+             (apply merge-with m maps)
+             (last maps)))
+         maps))
 
 
 (defn deep-unmerge
   [m kss]
   (reduce (fn [[extracted leftover] ks]
-            [(assoc-in extracted ks (get-in m ks))
+            [(if-let [v (get-in m ks)] (assoc-in extracted ks v) extracted)
              (update-in leftover (butlast ks) dissoc (last ks))])
           [{} m]
           kss))
@@ -40,7 +40,8 @@
   SessionStore
   (read-session [_ key]
     (when-let [data (session/read-session session-store key)]
-      (deep-merge data (deserialize (::serialized data)))))
+      (deep-merge data (when-let [to-deserialize (::serialized data)]
+                         (deserialize to-deserialize)))))
   (write-session [_ key data]
     (let [[plain to-serialize] (deep-unmerge data (:plain options))
           serialized (assoc plain ::serialized (serialize to-serialize))]
