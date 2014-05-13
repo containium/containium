@@ -42,7 +42,7 @@
   (do-prepared cassandra remove-query {:consistency session-consistency} [key]))
 
 
-(defrecord CassandraStore [ttl-mins cassandra read-q write-q remove-q]
+(defrecord CassandraStore [ttl-mins cassandra read-q write-q write-q-long remove-q]
   SessionStore
   (read-session [_ key]
     ;; If the key is non-nil, try Cassandra. If cassandra fails, or the key was nil, an empty
@@ -55,14 +55,15 @@
     ;; and the time it specifies is younger than the current time minus TTL,
     ;; and the session data has not changed within the handling of the request.
     (let [new-key (or key (str (UUID/randomUUID)))
-          new-data (if-not (and (get data ::last-db-write)
+          new-data (if-not (and (get data :containium/last-db-write)
                                 (< (- (System/currentTimeMillis) (* ttl-mins 60000))
-                                   (get data ::last-db-write))
+                                   (get data :containium/last-db-write))
                                 (= data (read-session this key)))
-                     (assoc data ::last-db-write (System/currentTimeMillis))
+                     (assoc data :containium/last-db-write (System/currentTimeMillis))
                      data)]
-      (when-not (= data new-data)
-        (write-session-data cassandra write-q new-key new-data))
+      (when-not (= data new-write)
+        (let [q (if (get-in data [:noir :session/longlived]) write-q-long write-q)]
+          (write-session-data cassandra q new-key new-data)))
       new-key))
 
   (delete-session [_ key]
@@ -91,12 +92,17 @@
                        config "...")
             _ (ensure-schema cassandra)
             ttl-mins (:ttl-mins config)
+            ttl-days (:ttl-days config)
             _ (assert ttl-mins "Missing :ttl-mins config")
+            _ (assert ttl-mins-long "Missing :ttl-mins-long config")
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
             ;; TTL in the database queure is twice as what is configured, as unchanged session
             ;; data is only written once in TTL minutes to the database.
             write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* 2 60 ttl-mins)
                                             " SET data = ? WHERE key = ?;"))
+            write-q-long (prepare cassandra
+                                  (str "UPDATE ring.sessions USING TTL " (* 60 60 24 ttl-days)
+                                       " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
         (println "Cassandra Ring session store started.")
-        (CassandraStore. ttl-mins cassandra read-q write-q remove-q)))))
+        (CassandraStore. ttl-mins cassandra read-q write-q write-q-long remove-q)))))

@@ -16,7 +16,8 @@
  :cassandra {:config-file "cassandra.yaml"}
  :alia {:contact-points ["localhost"]
         :port 9042}
- :session-store {:ttl-mins 60}
+ :session-store {:ttl-mins 60
+                 :ttl-days 30}
  :kafka {:server {:port 9090
                   :broker.id 1
                   :message.max.bytes 16777216
