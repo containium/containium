@@ -7,13 +7,44 @@
             [taoensso.nippy :as nippy]))
 
 
-(defrecord SerializingSessionStore [session-store serialize deserialize]
+;;; Helper methods.
+
+(defn deep-merge
+  "Like merge-with, but merges maps recursively."
+  [& maps]
+  (apply
+   (fn m [& maps]
+     (if (every? map? maps)
+       (apply merge-with m maps)
+       (last maps)))
+   maps))
+
+
+(defn deep-unmerge
+  [m kss]
+  (reduce (fn [[extracted leftover] ks]
+            [(assoc-in extracted ks (get-in m ks))
+             (update-in leftover (butlast ks) dissoc (last ks))])
+          [{} m]
+          kss))
+
+
+;;; Serializing session store.
+
+(def default-plain
+  [[:noir :session/longlived]
+   [:containium/last-db-write]])
+
+
+(defrecord SerializingSessionStore [session-store serialize deserialize options]
   SessionStore
   (read-session [_ key]
-    (when-let [data (::serialized (session/read-session session-store key))]
-      (deserialize data)))
+    (when-let [data (session/read-session session-store key)]
+      (deep-merge data (deserialize (::serialized data)))))
   (write-session [_ key data]
-    (session/write-session session-store key {::serialized (serialize data)}))
+    (let [[plain to-serialize] (deep-unmerge data (:plain options))
+          serialized (assoc plain ::serialized (serialize to-serialize))]
+      (session/write-session session-store key serialized)))
   (delete-session [this key]
     (session/delete-session session-store key)))
 
@@ -22,6 +53,7 @@
   ([session-store]
      (mk-session-store session-store nil))
   ([session-store {:keys [serializer deserializer]
-                                 :or {serializer nippy/freeze deserializer nippy/thaw}
-                                 :as options}]
-     (SerializingSessionStore. session-store (or serializer identity) (or deserializer identity))))
+                   :or {serializer nippy/freeze, deserializer nippy/thaw}
+                   :as options}]
+     (SerializingSessionStore. session-store (or serializer identity) (or deserializer identity)
+                               (merge {:plain default-plain} options))))
