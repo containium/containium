@@ -45,7 +45,9 @@
                     "having a context-path nor a host-regex ("
                     (apply str (interpose ", " (map :name non-deterministic)))
                     ")."))))
-  (->> apps (sort-by #(get % :sort-value)) reverse))
+  (let [sorted (->> apps (sort-by #(get % :sort-value)) reverse)]
+    (log-fn (apply str "Sorted apps: " (interpose ", " (map :name apps))))
+    sorted))
 
 
 (defmacro matcher
@@ -85,8 +87,11 @@
                                                 (let [~'app (~'sorted ~index)]
                                                   (boxure/call-in-box
                                                    (:box ~'app)
-                                                   ((:handler-fn ~'app)
-                                                   ~(if-let [cp (-> app :ring-conf :context-path)]
+                                                   (; Optionally print the request map before execution
+                                                    ~(if-not (= false (-> app :ring-conf :print-requests))
+                                                      `(do (println "[" ~(str (:name app)) "] " ~'request) (:handler-fn ~'app))
+                                                      `(:handler-fn ~'app))
+                                                    ~(if-let [cp (-> app :ring-conf :context-path)]
                                                       `(update-in ~'request [:uri]
                                                                   #(subs % ~(count cp)))
                                                       'request)))))))))
