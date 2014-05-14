@@ -13,7 +13,7 @@
                  [jline "2.11"]
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
                  [http-kit "2.1.18"]
-                 [org.apache.httpcomponents/httpclient "4.2.3"]
+                 [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
                  [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
