@@ -34,6 +34,13 @@
                       "cemerick.pomegranate.*"
                       "bultitude.core*"
                       "dynapath.*"
+                      "simple_time.*"
+                      "clj_elasticsearch.*"
+                      "cheshire.*"
+                      ;; Prime middleware deps
+                      "prime\\.session.*"
+                      "ring\\.util.*"
+                      "noir.*"
                       ;; Alia system deps
                       "qbits.*"
                       "clj.time.*"

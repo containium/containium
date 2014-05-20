@@ -16,6 +16,7 @@
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
+            [containium.systems.ring-analytics :as ring-analytics]
             [containium.utils.async :as async-util]
             [containium.exceptions :as ex]
             [clojure.java.io :refer (resource as-file)]
@@ -218,10 +219,11 @@
                               :cassandra cassandra/embedded12
                               :elastic elastic/embedded
                               :kafka kafka/embedded
+                              :session-store cass-session/default
+                              :ring-analytics ring-analytics/elasticsearch
                               :http-kit http-kit/http-kit
                               :jetty9 jetty9/jetty9
                               :ring ring/distributed
-                              :session-store cass-session/default
                               :modules modules/default-manager
                               :fs deployer/directory
                               :socket socket/socket

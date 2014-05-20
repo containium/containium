@@ -7,21 +7,22 @@
   (:require [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring box->ring-app make-app)]
+            [containium.systems.ring-analytics :refer (Analytics)]
             [netty.ring.adapter :as netty]))
 
 
-(defrecord Netty [stop-fn app apps]
+(defrecord Netty [stop-fn app apps ring-analytics]
   Ring
   (upstart-box [_ name box log-fn]
     (log-fn "Adding module" name "to Netty handler.")
     (->> (box->ring-app name box log-fn)
          (swap! apps assoc name)
-         (make-app log-fn)
+         (make-app log-fn ring-analytics)
          (reset! app)))
   (remove-box [_ name log-fn]
     (println "Removing module" name "from Netty handler.")
     (->> (swap! apps dissoc name)
-         (make-app log-fn)
+         (make-app log-fn ring-analytics)
          (reset! app)))
 
   Stoppable
@@ -36,8 +37,9 @@
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :netty)
             _ (println "Starting Netty server, using config" config)
-            app (atom (make-app println {}))
+            ring-analytics (require-system Analytics systems)
+            app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             stop-fn (netty/start-server app-fn config)]
         (println "Netty server started.")
-        (Netty. stop-fn app (atom {}))))))
+        (Netty. stop-fn app (atom {}) ring-analytics)))))

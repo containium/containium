@@ -7,6 +7,7 @@
   an API to a ring server."
   (:require [containium.exceptions :as ex]
             [containium.systems :refer (Startable)]
+            [containium.systems.ring-analytics :as ana]
             [boxure.core :as boxure]))
 
 
@@ -75,28 +76,29 @@
 (defn make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
-  [log-fn apps]
+  [log-fn ring-analytics apps]
   (let [handler (if-let [apps (seq (vals apps))]
                   (let [sorted (vec (sort-apps apps log-fn))
-                        fn-form `(fn [~'sorted ~'request]
+                        fn-form `(fn [~'sorted ~'ring-analytics ~'request]
                                    (let [~'uri (:uri ~'request)
                                          ~'host (-> ~'request :headers (get "host"))]
                                      (or ~@(for [index (range (count sorted))
                                                  :let [app (get sorted index)]]
                                              `(when (matcher ~(:ring-conf app) ~'uri ~'host)
-                                                (let [~'app (~'sorted ~index)]
+                                                (let [~'app (~'sorted ~index)
+                                                      ~'name (-> ~'app :box :name)
+                                                      ~'handler-fn (:handler-fn ~'app)
+                                                      ~'request ~(if-let [cp (-> app :ring-conf :context-path)]
+                                                                   `(update-in ~'request [:uri] #(subs % ~(count cp)))
+                                                                   'request)]
+                                                  ~(when (-> app :ring-conf :print-requests)
+                                                     `(println (str "[" ~'name "]") ~'request))
+                                                  (ana/store-request ~'ring-analytics ~'name ~'request)
                                                   (boxure/call-in-box
                                                    (:box ~'app)
-                                                   (; Optionally print the request map before execution
-                                                    ~(if-not (= false (-> app :ring-conf :print-requests))
-                                                      `(do (println "[" ~(str (:name app)) "] " ~'request) (:handler-fn ~'app))
-                                                      `(:handler-fn ~'app))
-                                                    ~(if-let [cp (-> app :ring-conf :context-path)]
-                                                      `(update-in ~'request [:uri]
-                                                                  #(subs % ~(count cp)))
-                                                      'request)))))))))
+                                                   (~'handler-fn ~'request))))))))
                         handler (eval fn-form)]
-                    (fn [request] (handler sorted request)))
+                    (fn [request] (handler sorted ring-analytics request)))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (wrap-try-catch handler)))
 
