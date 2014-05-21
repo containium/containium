@@ -6,6 +6,7 @@
   "Analytics is a system that can store ring requests."
   (:require [containium.systems :as systems :refer (Startable Stoppable)]
             [containium.systems.elasticsearch :as es-system :refer (Elastic)]
+            [containium.exceptions :as ex]
             [ring.middleware.session.store :refer (SessionStore)]
             [ring.middleware.params]
             [ring.middleware.session]
@@ -13,7 +14,8 @@
             [prime.session]
             [simple-time.core :as time]
             [clj-elasticsearch.client :as elastic]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [packthread.core :refer (+>)]))
 
 
 ;;; The public system API.
@@ -38,30 +40,34 @@
                            :source (json/generate-smile request)
                            :type "request"
                            :async? true
-                           :content-type :smile})
-  request)
+                           :content-type :smile}))
 
 
 (defn- wrap-ring-analytics*
-  [{:keys [node session-opts] :as record} app-name handler]
-  (let [wrapped (-> handler
-                    (ring.middleware.session/wrap-session session-opts)
-                    prime.session/wrap-sid-query-param
-                    ring.middleware.cookies/wrap-cookies
-                    ring.middleware.params/wrap-params)]
-    (fn [request]
-      (let [started (System/currentTimeMillis)
-            response (wrapped request)
-            processed (-> request
-                          (dissoc :body :async-channel)
-                          (assoc :started started
-                                 :took (- (System/currentTimeMillis) started)
-                                 :status (:status response)))]
-        (store-request node app-name processed)
-        response))))
+  [{:keys [node] :as record} app-name handler]
+  (-> (fn [request]
+        (let [started (System/currentTimeMillis)
+              response (try (handler request)
+                            (catch Throwable t (ex/exit-when-fatal t) t))
+              processed (+> request
+                            (dissoc :body :async-channel)
+                            (assoc :started started
+                                   :took (- (System/currentTimeMillis) started))
+                            (if (instance? Throwable response)
+                              (assoc :failed (.getMessage response))
+                              (assoc :status (:status response))))]
+          (try (store-request node app-name processed)
+               (catch Throwable t
+                 (ex/exit-when-fatal t)
+                 (println "Failed to store request for ring-analytics:")
+                 (println "Request (processed)" processed)
+                 (.printStackTrace t)))
+          (if (instance? Throwable response) (throw response) response)))
+      ring.middleware.cookies/wrap-cookies
+      ring.middleware.params/wrap-params))
 
 
-(defrecord ElasticAnalytics [node session-opts]
+(defrecord ElasticAnalytics [node]
   Analytics
   (wrap-ring-analytics [this app-name handler]
     (wrap-ring-analytics* this app-name handler))
@@ -74,9 +80,6 @@
   (reify Startable
     (start [this systems]
       (println "Starting Analytics based on ElasticSearch...")
-      (let [elastic (systems/require-system Elastic systems)
-            session-store (systems/require-system SessionStore systems)
-            session-opts {:session-store session-store
-                          :cookie-name "sid"}]
+      (let [elastic (systems/require-system Elastic systems)]
         (println "Started Analytics based on ElasticSearch.")
-        (ElasticAnalytics. (es-system/node elastic) session-opts)))))
+        (ElasticAnalytics. (es-system/node elastic))))))

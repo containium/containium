@@ -113,9 +113,11 @@
                                              (when (:print-requests ring-conf)
                                                (wrap-log-request (:name box) println))
                                              (wrap-matcher ring-conf)))
-                                       sorted)]
+                                       sorted)
+                        miss-handler (wrap-ring-analytics ring-analytics "404" (constantly {:status 404}))]
                     (fn [request]
-                      (some (fn [handler] (handler request)) handlers)))
+                      (or (some (fn [handler] (handler request)) handlers)
+                          (miss-handler request))))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (wrap-try-catch handler)))
 

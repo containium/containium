@@ -35,8 +35,10 @@
                       "bultitude.core*"
                       "dynapath.*"
                       "simple_time.*"
+                      ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
+                      "gavagai.*"
                       ;; Prime middleware deps
                       "prime\\.session.*"
                       "ring\\.util.*"
