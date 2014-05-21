@@ -41,6 +41,9 @@
                       "prime\\.session.*"
                       "ring\\.util.*"
                       "noir.*"
+                      ;; Packthread deps
+                      "packthread.*"
+                      "clojure\\.core\\.match.*"
                       ;; Alia system deps
                       "qbits.*"
                       "clj.time.*"

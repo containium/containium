@@ -19,9 +19,10 @@
 ;;; The public system API.
 
 (defprotocol Analytics
-  (store-request [this app request]
-    "Stores the given request, using the given app name for the log
-    name. Returns the original request."))
+  (wrap-ring-analytics [this app-name handler]
+    "Returns a handler that stores the given request, using the given
+    app name for the log name. The body is not read by this
+    middleware."))
 
 
 ;;; ElasticSearch implementation.
@@ -31,9 +32,9 @@
   (str "log-" app "-" (time/format (time/today) :basic-date)))
 
 
-(defn- store-fn
-  [node request]
-  (elastic/index-doc node {:index (daily-index (::app request))
+(defn- store-request
+  [node app-name request]
+  (elastic/index-doc node {:index (daily-index app-name)
                            :source (json/generate-smile request)
                            :type "request"
                            :async? true
@@ -41,14 +42,29 @@
   request)
 
 
-(defrecord ElasticAnalytics [wrapped-fn]
+(defn- wrap-ring-analytics*
+  [{:keys [node session-opts] :as record} app-name handler]
+  (let [wrapped (-> handler
+                    (ring.middleware.session/wrap-session session-opts)
+                    prime.session/wrap-sid-query-param
+                    ring.middleware.cookies/wrap-cookies
+                    ring.middleware.params/wrap-params)]
+    (fn [request]
+      (let [started (System/currentTimeMillis)
+            response (wrapped request)
+            processed (-> request
+                          (dissoc :body :async-channel)
+                          (assoc :started started
+                                 :took (- (System/currentTimeMillis) started)
+                                 :status (:status response)))]
+        (store-request node app-name processed)
+        response))))
+
+
+(defrecord ElasticAnalytics [node session-opts]
   Analytics
-  (store-request [this app request]
-    (wrapped-fn (-> request
-                    (dissoc :body :async-channel)
-                    (assoc :timestamp (System/currentTimeMillis)
-                           ::app app)))
-    request)
+  (wrap-ring-analytics [this app-name handler]
+    (wrap-ring-analytics* this app-name handler))
   Stoppable
   (stop [this]
     (println "Stopped Analytics based on ElasticSearch.")))
@@ -61,11 +77,6 @@
       (let [elastic (systems/require-system Elastic systems)
             session-store (systems/require-system SessionStore systems)
             session-opts {:session-store session-store
-                          :cookie-name "sid"}
-            wrapped-fn (-> (partial store-fn (es-system/node elastic))
-                           (ring.middleware.session/wrap-session session-opts)
-                           prime.session/wrap-sid-query-param
-                           ring.middleware.cookies/wrap-cookies
-                           ring.middleware.params/wrap-params)]
+                          :cookie-name "sid"}]
         (println "Started Analytics based on ElasticSearch.")
-        (ElasticAnalytics. wrapped-fn)))))
+        (ElasticAnalytics. (es-system/node elastic) session-opts)))))
