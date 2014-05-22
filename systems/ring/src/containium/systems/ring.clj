@@ -84,8 +84,7 @@
                        (fn [request]
                          (and (.startsWith ^String (:uri request) context-path)
                               (= (get (:uri request) (count context-path)) \/))))
-        all-tests (let [tests (remove nil? [host-test context-test])]
-                    (fn [request] (every? #(% request) tests)))]
+        all-tests (apply every-pred (remove nil? [host-test context-test]))]
     (fn [request]
       (when (all-tests request)
         (handler request)))))
@@ -114,9 +113,10 @@
                                                    (wrap-log-request (:name box) println))
                                                  (wrap-matcher ring-conf)))
                                            sorted))
+                        all-handlers (apply some-fn handlers)
                         miss-handler (wrap-ring-analytics ring-analytics "404" (constantly {:status 404}))]
                     (fn [request]
-                      (or (some (fn [handler] (handler request)) handlers)
+                      (or (all-handlers request)
                           (miss-handler request))))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (wrap-try-catch handler)))
