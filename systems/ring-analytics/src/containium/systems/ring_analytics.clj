@@ -39,7 +39,7 @@
   (elastic/index-doc node {:index (daily-index app-name)
                            :source (json/generate-smile request)
                            :type "request"
-                           :async? true
+                           :async? false
                            :content-type :smile}))
 
 
@@ -51,20 +51,35 @@
                             (catch Throwable t (ex/exit-when-fatal t) t))
               processed (+> request
                             (dissoc :body :async-channel)
-                            (assoc :started started
+                            (assoc :started (time/format (time/datetime started)
+                                                         :date-hour-minute-second-ms)
                                    :took (- (System/currentTimeMillis) started))
                             (if (instance? Throwable response)
-                              (assoc :failed (.getMessage response))
+                              (assoc :failed (.getMessage ^Throwable response))
                               (assoc :status (:status response))))]
-          (try (store-request node app-name processed)
-               (catch Throwable t
-                 (ex/exit-when-fatal t)
-                 (println "Failed to store request for ring-analytics:")
-                 (println "Request (processed)" processed)
-                 (.printStackTrace t)))
+          (future (try (store-request node app-name processed)
+                       (catch Throwable t
+                         (ex/exit-when-fatal t)
+                         (println "Failed to store request for ring-analytics:")
+                         (println "Request (processed)" processed)
+                         (.printStackTrace t))))
           (if (instance? Throwable response) (throw response) response)))
       ring.middleware.cookies/wrap-cookies
       ring.middleware.params/wrap-params))
+
+
+(defn- put-template
+  [node]
+  (let [template {:template "log-*"
+                  :mappings {:request {:properties {"started"
+                                                    {:type :date
+                                                     :format :date_hour_minute_second_millis}}
+                                       :_source {:excludes ["params.password"
+                                                            "form-params.password"]}}}}]
+    (elastic/put-template node {:name "log"
+                                :source (json/generate-smile template)
+                                :content-type :smile
+                                :create? false})))
 
 
 (defrecord ElasticAnalytics [node]
@@ -81,5 +96,7 @@
     (start [this systems]
       (println "Starting Analytics based on ElasticSearch...")
       (let [elastic (systems/require-system Elastic systems)]
-        (println "Started Analytics based on ElasticSearch.")
-        (ElasticAnalytics. (es-system/node elastic))))))
+        (let [node (es-system/node elastic)]
+          (put-template node)
+          (println "Started Analytics based on ElasticSearch.")
+          (ElasticAnalytics. node))))))

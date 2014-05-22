@@ -104,16 +104,16 @@
   [log-fn ring-analytics apps]
   (let [handler (if-let [apps (seq (vals apps))]
                   (let [sorted (vec (sort-apps apps log-fn))
-                        handlers (mapv (fn [{:keys [ring-conf handler-fn box] :as app}]
-                                         (+> handler-fn
-                                             (wrap-call-in-box box)
-                                             (->> (wrap-ring-analytics ring-analytics (:name box)))
-                                             (when-let [cp (:context-path ring-conf)]
-                                               (wrap-trim-context cp))
-                                             (when (:print-requests ring-conf)
-                                               (wrap-log-request (:name box) println))
-                                             (wrap-matcher ring-conf)))
-                                       sorted)
+                        handlers (seq (map (fn [{:keys [ring-conf handler-fn box] :as app}]
+                                             (+> handler-fn
+                                                 (wrap-call-in-box box)
+                                                 (->> (wrap-ring-analytics ring-analytics (:name box)))
+                                                 (when-let [cp (:context-path ring-conf)]
+                                                   (wrap-trim-context cp))
+                                                 (when (:print-requests ring-conf)
+                                                   (wrap-log-request (:name box) println))
+                                                 (wrap-matcher ring-conf)))
+                                           sorted))
                         miss-handler (wrap-ring-analytics ring-analytics "404" (constantly {:status 404}))]
                     (fn [request]
                       (or (some (fn [handler] (handler request)) handlers)
