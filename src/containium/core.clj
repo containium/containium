@@ -17,6 +17,7 @@
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
             [containium.systems.ring-analytics :as ring-analytics]
+            [containium.systems.mail :as mail]
             [containium.utils.async :as async-util]
             [containium.exceptions :as ex]
             [clojure.java.io :refer (resource as-file)]
@@ -216,6 +217,7 @@
   [& [daemon? args]]
   (ex/register-default-handler)
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
+                              :postal mail/postal
                               :cassandra cassandra/embedded12
                               :elastic elastic/embedded
                               :kafka kafka/embedded

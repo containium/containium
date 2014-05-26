@@ -35,6 +35,7 @@
                       "bultitude.core*"
                       "dynapath.*"
                       "simple_time.*"
+                      "postal.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
@@ -64,4 +65,5 @@
  :fs {:deployments "deployments"}
  :socket {:port 9999
           :wait2finish-secs 30
-          :wait2close-secs 5}}
+          :wait2close-secs 5}
+ :postal {:host "localhost"}}

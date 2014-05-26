@@ -136,7 +136,8 @@
   (let [keyword->protocol {:cassandra 'containium.systems.cassandra/Cassandra
                            :elastic 'containium.systems.elasticsearch/Elastic
                            :kafka 'containium.systems.kafka/Kafka
-                           :session-store 'ring.middleware.session.store/SessionStore}]
+                           :session-store 'ring.middleware.session.store/SessionStore
+                           :postal 'containium.systems.mail/Mail}]
     (doseq [[keyword system] systems
             :let [protocol (keyword->protocol keyword)]
             :when protocol]
