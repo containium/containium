@@ -217,7 +217,7 @@
   [& [daemon? args]]
   (ex/register-default-handler)
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
-                              :postal mail/postal
+                              :mail mail/postal
                               :cassandra cassandra/embedded12
                               :elastic elastic/embedded
                               :kafka kafka/embedded
