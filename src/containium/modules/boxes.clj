@@ -8,7 +8,7 @@
             [leiningen.core.project]
             [clojure.core.async :as async]
             [containium.exceptions :as ex]
-            [containium.utils.session-store])) ; load session-store, because it is shared with boxes
+            [ring.util.codec])) ; load codec, because it is shared with boxes
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -51,8 +51,9 @@
               box-debug (System/getenv "BOXDEBUG")
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
               injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
-                                                          (str "containium\\.(?!core).*"
+                                                          (str "containium\\.(?!core|utils).*"
                                                                "|ring\\.middleware.*"
+                                                               "|ring\\.util\\.codec.*"
                                                                "|org\\.httpkit.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
