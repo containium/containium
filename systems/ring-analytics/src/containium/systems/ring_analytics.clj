@@ -15,7 +15,8 @@
             [simple-time.core :as time]
             [clj-elasticsearch.client :as elastic]
             [cheshire.core :as json]
-            [packthread.core :refer (+>)]))
+            [packthread.core :refer (+>)]
+            [clojure.string :refer (lower-case)]))
 
 
 ;;; The public system API.
@@ -31,7 +32,7 @@
 
 (defn- daily-index
   [app]
-  (str "log-" app "-" (time/format (time/today) :basic-date)))
+  (str "log-" (lower-case app) "-" (time/format (time/today) :basic-date)))
 
 
 (defn- store-request

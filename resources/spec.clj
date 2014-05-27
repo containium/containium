@@ -27,6 +27,7 @@
  :elastic {}
  :modules {:resolve-dependencies true
            :isolates [;"containium.*"
+                      "containium\\.utils.*"
                       "taoensso\\.nippy.*"
                       "ring\\.(?!middleware).*"
                       "leiningen.*"
