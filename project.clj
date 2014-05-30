@@ -15,7 +15,7 @@
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
-                 [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
+                 [org.apache.cassandra/cassandra-all "1.2.16" :exclusions [javax.servlet/servlet-api]]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.5"]
                  [org.scala-lang/scala-library "2.9.2"]
