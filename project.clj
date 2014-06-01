@@ -17,7 +17,7 @@
                  [io.netty/netty "3.9.0.Final"]
                  [org.apache.cassandra/cassandra-all "1.2.16" :exclusions [javax.servlet/servlet-api]]
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
-                 [org.elasticsearch/elasticsearch "0.90.5"]
+                 [org.elasticsearch/elasticsearch "0.90.7"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.1.1"]
                  [com.taoensso/nippy "2.5.2"]
