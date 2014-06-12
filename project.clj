@@ -15,7 +15,9 @@
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
-                 [org.apache.cassandra/cassandra-all "1.2.16" :exclusions [javax.servlet/servlet-api]]
+                 [org.apache.cassandra/cassandra-all "1.2.16"
+                  :exclusions [javax.servlet/servlet-api org.yaml/snakeyaml]]
+                 [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
                  [org.elasticsearch/elasticsearch "0.90.7"]
                  [org.scala-lang/scala-library "2.9.2"]
