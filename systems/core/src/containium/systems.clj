@@ -137,7 +137,7 @@
                            :elastic 'containium.systems.elasticsearch/Elastic
                            :kafka 'containium.systems.kafka/Kafka
                            :session-store 'ring.middleware.session.store/SessionStore
-                           :postal 'containium.systems.mail/Mail}]
+                           :mail 'containium.systems.mail/Mail}]
     (doseq [[keyword system] systems
             :let [protocol (keyword->protocol keyword)]
             :when protocol]

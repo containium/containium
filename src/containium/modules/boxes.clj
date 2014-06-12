@@ -8,7 +8,8 @@
             [leiningen.core.project]
             [clojure.core.async :as async]
             [containium.exceptions :as ex]
-            [ring.util.codec])) ; load codec, because it is shared with boxes
+            [ring.util.codec] ; load codec, because it is shared with boxes
+            [postal.core]))
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -54,6 +55,7 @@
                                                           (str "containium\\.(?!core|utils).*"
                                                                "|ring\\.middleware.*"
                                                                "|ring\\.util\\.codec.*"
+                                                               "|postal.*"
                                                                "|org\\.httpkit.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))

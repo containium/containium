@@ -67,4 +67,5 @@
  :socket {:port 9999
           :wait2finish-secs 30
           :wait2close-secs 5}
- :postal {:host "localhost"}}
+ :postal {:host "localhost"
+          :port 1025}}
