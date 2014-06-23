@@ -12,13 +12,13 @@
 ;;; The public API for Elastic systems.
 
 (defprotocol Elastic
-  (node [this]
+  (^org.elasticsearch.node.Node node [this]
     "Returns the Node object used connecting.")) ;;---TODO: Is this a good API?
 
 
 ;;; The embedded implementation.
 
-(defrecord EmbeddedElastic [^ Node node]
+(defrecord EmbeddedElastic [^Node node]
   Elastic
   (node [_] node)
 

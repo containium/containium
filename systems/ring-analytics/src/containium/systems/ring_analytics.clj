@@ -10,7 +10,8 @@
             [ring.middleware.params]
             [ring.middleware.cookies]
             [simple-time.core :as time]
-            [clj-elasticsearch.client :as elastic]
+            [clojurewerkz.elastisch.native.document :as elastic]
+            [clojurewerkz.elastisch.native.index :as esindex]
             [cheshire.core :as json]
             [packthread.core :refer (+>)]
             [clojure.string :refer (lower-case)]))
@@ -33,16 +34,12 @@
 
 
 (defn- store-request
-  [node app-name request]
-  (elastic/index-doc node {:index (daily-index app-name)
-                           :source (json/generate-smile request)
-                           :type "request"
-                           :async? false
-                           :content-type :smile}))
+  [client app-name request]
+  (elastic/create client (daily-index app-name) "request" request :content-type :smile))
 
 
 (defn- wrap-ring-analytics*
-  [{:keys [node] :as record} app-name handler]
+  [{:keys [client] :as record} app-name handler]
   (-> (fn [request]
         (let [started (System/currentTimeMillis)
               response (try (handler request)
@@ -55,7 +52,7 @@
                             (if (instance? Throwable response)
                               (assoc :failed (.getMessage ^Throwable response))
                               (assoc :status (:status response))))]
-          (future (try (store-request node app-name processed)
+          (future (try (store-request client app-name processed)
                        (catch Throwable t
                          (ex/exit-when-fatal t)
                          (println "Failed to store request for ring-analytics:")
@@ -67,20 +64,16 @@
 
 
 (defn- put-template
-  [node]
-  (let [template {:template "log-*"
-                  :mappings {:request {:properties {"started"
-                                                    {:type :date
-                                                     :format :date_hour_minute_second_millis}}
-                                       :_source {:excludes ["params.password"
-                                                            "form-params.password"]}}}}]
-    (elastic/put-template node {:name "log"
-                                :source (json/generate-smile template)
-                                :content-type :smile
-                                :create? false})))
+  [client]
+  (esindex/put-template client "log", :template "log-*"
+    :mappings {:request {:properties {"started" {:type "date"
+                                                 :format "date_hour_minute_second_millis"}}
+                                     :_source {:excludes ["params.password"
+                                                          "form-params.password"]}}}
+    :content-type :smile, :create? false))
 
 
-(defrecord ElasticAnalytics [node]
+(defrecord ElasticAnalytics [client]
   Analytics
   (wrap-ring-analytics [this app-name handler]
     (wrap-ring-analytics* this app-name handler))
@@ -94,7 +87,7 @@
     (start [this systems]
       (println "Starting Analytics based on ElasticSearch...")
       (let [elastic (systems/require-system Elastic systems)]
-        (let [node (es-system/node elastic)]
-          (put-template node)
+        (let [client (.client (es-system/node elastic))]
+          (put-template client)
           (println "Started Analytics based on ElasticSearch.")
-          (ElasticAnalytics. node))))))
+          (ElasticAnalytics. client))))))

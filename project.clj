@@ -19,7 +19,7 @@
                   :exclusions [javax.servlet/servlet-api org.yaml/snakeyaml]]
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
-                 [org.elasticsearch/elasticsearch "0.90.7"]
+                 [org.elasticsearch/elasticsearch "1.2.1"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.1.1"]
                  [com.taoensso/nippy "2.5.2"]
@@ -29,8 +29,7 @@
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
                  [cc.qbits/alia "1.9.2"]
                  [simple-time "0.1.1"]
-                 [org.clojars.touch/clj-elasticsearch "0.4.2"]
-                 [cheshire "5.2.0"]
+                 [clojurewerkz/elastisch "2.0.0"]
                  [com.maitria/packthread "0.1.1"]
                  [com.draines/postal "1.11.1"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
