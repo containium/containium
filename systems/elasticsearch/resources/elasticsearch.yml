@@ -44,6 +44,9 @@ index:
 #
 cluster.name: containium
 
+# Allow Clojure VOProxy scripts (and other dynamic scripts) to run
+#
+script.disable_dynamic: false
 
 #################################### Node #####################################
 
