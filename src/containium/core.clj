@@ -16,6 +16,8 @@
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
+            [containium.systems.ring-analytics :as ring-analytics]
+            [containium.systems.mail :as mail]
             [containium.utils.async :as async-util]
             [containium.exceptions :as ex]
             [containium.commands :as commands]
@@ -34,7 +36,12 @@
 (defmacro eval-in
   "Evaluate the given `forms` (in an implicit do) in the module identified by `name`."
   [name & forms]
-  `@(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name)) '(do ~@forms)))
+
+  (let [box @(get @(get-in systems [:modules :agents]) name)]
+    (assert box (str "Module not found: " name))
+    `(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
+                        '(try (do ~@forms)
+                              (catch Throwable e# (do (.printStackTrace e#) e#))))))
 
 
 ;;; Command loop.
@@ -122,19 +129,24 @@
   Any other argument will activate daemon mode."
   [& [daemon? args]]
   (ex/register-default-handler)
-  (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
-                         :cassandra cassandra/embedded12
-                         :elastic elastic/embedded
-                         :kafka kafka/embedded
-                         :http-kit http-kit/http-kit
-                         :jetty9 jetty9/jetty9
-                         :ring ring/distributed
-                         :session-store cass-session/embedded
-                         :modules modules/default-manager
-                         :fs deployer/directory
-                         :socket socket/socket
-                         :repl repl/nrepl]
-    ((if daemon? run-daemon #_else run) systems))
-  (println "Shutting down...")
-  (shutdown-agents)
-  (shutdown-timer 15 daemon?))
+  (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
+                              :mail mail/postal
+                              :cassandra cassandra/embedded12
+                              :elastic elastic/embedded
+                              :kafka kafka/embedded
+                              :session-store cass-session/default
+                              :ring-analytics ring-analytics/elasticsearch
+                              :http-kit http-kit/http-kit
+                              :jetty9 jetty9/jetty9
+                              :ring ring/distributed
+                              :modules modules/default-manager
+                              :fs deployer/directory
+                              :socket socket/socket
+                              :repl repl/nrepl]
+         ((if daemon? run-daemon #_else run) systems))
+       (catch Exception ex
+         (.printStackTrace ex))
+       (finally
+         (println "Shutting down...")
+         (shutdown-agents)
+         (shutdown-timer 15 daemon?))))

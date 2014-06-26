@@ -7,23 +7,24 @@
   (:require [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring box->ring-app make-app)]
+            [containium.systems.ring-analytics :refer (Analytics)]
             [ring.adapter.jetty9 :as jetty9]))
 
 
 ;;; Normal implementation.
 
-(defrecord Jetty9 [server app apps]
+(defrecord Jetty9 [server app apps ring-analytics]
   Ring
   (upstart-box [_ name box log-fn]
     (log-fn "Adding module" name "to Jetty9 handler.")
     (->> (box->ring-app name box log-fn)
          (swap! apps assoc name)
-         (make-app log-fn)
+         (make-app log-fn ring-analytics)
          (reset! app)))
   (remove-box [_ name log-fn]
     (log-fn "Removing module" name "from Jetty9 handler.")
     (->> (swap! apps dissoc name)
-         (make-app log-fn)
+         (make-app log-fn ring-analytics)
          (reset! app)))
 
   Stoppable
@@ -38,11 +39,12 @@
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :jetty9)
             _ (println "Starting Jetty9 server, using config" config)
-            app (atom (make-app println {}))
+            ring-analytics (require-system Analytics systems)
+            app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             server (jetty9/run-jetty app-fn config)]
         (println "Jetty9 server started.")
-        (Jetty9. server app (atom {}))))))
+        (Jetty9. server app (atom {}) ring-analytics)))))
 
 
 ;;; Test implementation.

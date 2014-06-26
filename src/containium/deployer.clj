@@ -69,9 +69,8 @@
            (let [name (:name msg)]
              (case (:type msg)
                :activate
-               (do (when-let [descriptor (:data msg)]
-                     (swap! descriptors assoc name (update-in descriptor [:file] str)))
-                   (spit (file dir name) (get @descriptors name)))
+               (when-let [descriptor (:data msg)]
+                 (swap! descriptors assoc name (update-in descriptor [:file] str)))
 
                :deactivate
                (.delete (file dir name))
@@ -83,7 +82,10 @@
                :kill
                (.delete (file dir name))
 
-               nil))
+               :finished
+               (let [response (:data msg)]
+                 (when (and (= :deployed (:status response)) (:success? response))
+                   (spit (file dir name) (get @descriptors name))))))
            (recur))))
      chan))
 
@@ -115,7 +117,7 @@
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :fs)
             manager (require-system Manager systems)]
-        (println "Starting filesystem deploymer, using config" config "...")
+        (println "Starting filesystem deployer, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
         (let [dir (file (:deployments config))]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))

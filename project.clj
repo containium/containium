@@ -12,24 +12,32 @@
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
                  [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
-                 [http-kit "2.1.10"]
-                 [org.apache.httpcomponents/httpclient "4.2.3"]
+                 [http-kit "2.1.18"]
+                 [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
-                 [org.apache.cassandra/cassandra-all "1.2.12" :exclusions [javax.servlet/servlet-api]]
+                 [org.apache.cassandra/cassandra-all "1.2.16"
+                  :exclusions [javax.servlet/servlet-api org.yaml/snakeyaml]]
+                 [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java      "1.1.0-M4"]
-                 [org.elasticsearch/elasticsearch "0.90.5"]
+                 [org.elasticsearch/elasticsearch "1.2.1"]
+                 [com.sonian/elasticsearch-zookeeper "1.2.0"]
                  [org.scala-lang/scala-library "2.9.2"]
-                 [org.apache.kafka/kafka_2.9.2 "0.8.0"]
+                 [org.apache.kafka/kafka_2.9.2 "0.8.1.1"]
                  [com.taoensso/nippy "2.5.2"]
-                 [org.clojure/core.cache "0.6.3"]
+                 [org.clojars.touch/elasticsearch-lang-clojure "0.2.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
                  [cc.qbits/alia "1.9.2"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]]
+                 [simple-time "0.1.1"]
+                 [clojurewerkz/elastisch "2.0.0"]
+                 [com.maitria/packthread "0.1.1"]
+                 [com.draines/postal "1.11.1"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
-  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty]
+  :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
+               javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
   :main containium.core
   :aot [containium.core]
@@ -76,6 +84,10 @@
                                 [:id "test-clojure"]
                                 [:phase "test"]
                                 [:goals [:goal "test"]]])}]
+
+                [org.apache.maven.plugins/maven-compiler-plugin "3.1"
+                 {:configuration ([:source "1.7"]
+                                  [:target "1.7"])}]
 
                 [org.codehaus.mojo/buildnumber-maven-plugin "1.2"
                  {:executions [:execution [:phase "validate"] [:goals [:goal "create"]]]

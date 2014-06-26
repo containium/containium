@@ -7,7 +7,7 @@
   (:require [containium.exceptions :as ex]
             [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.systems.ring :refer (Ring upstart-box remove-box)]
+            [containium.systems.ring :refer (Ring upstart-box remove-box clean-ring-conf)]
             [containium.modules.boxes :refer (start-box stop-box)]
             [containium.logging :refer (log-command log-console log-all)]
             [clojure.edn :as edn]
@@ -29,7 +29,7 @@
 ;;  :deactivate <name>
 ;;  :kill <name>
 ;;  :status <name> status-keyword
-;;  :finish <name> Response-record
+;;  :finished <name> Response-record
 (defrecord Event [type name data])
 
 
@@ -148,13 +148,21 @@
        (assoc module :status status))))
 
 
+(defn clean-descriptor [descriptor name]
+  (->
+    (if (-> descriptor :containium :ring)
+        (update-in descriptor [:containium :ring] clean-ring-conf)
+       #_else descriptor)
+    (assoc :name name)))
+
+
 (defn- do-deploy
   [{:keys [name descriptor error] :as module} manager channel new-descriptor]
   (if-not error
     (let [log (partial log-all channel)]
       (if-let [descriptor (or new-descriptor descriptor)]
         (try
-          (let [{:keys [containium profiles] :as descriptor} (assoc descriptor :name name)
+          (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
                 boxure-config (-> (get-config (-> manager :systems :config) :modules)
                                   (assoc :profiles profiles))]
             ;; Try to start the box.
@@ -187,9 +195,9 @@
                    (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name) log))
                  (stop-box name (or (:box old) box) log))
            (do (log (str "Module '" name "' successfully undeployed."))
-               module)
-           (do (log (str "Module '" name "' failed to undeployed."))
-               (assoc module :error true)))
+               (if old module (dissoc module :box)))
+           (do (log (str "Module '" name "' failed to undeploy."))
+               (-> (if old module (dissoc module :box)) (assoc :error true))))
          module))))
 
 
@@ -259,9 +267,9 @@
   ([command manager name channel]
      (action command manager name channel nil))
   ([command manager name channel args]
-     (let [agent (get @(:agents manager) name)
-           status (when agent (:status @agent))]
-       (locking (or agent (Object.))
+     (locking (.intern ^String name)
+       (let [agent (get @(:agents manager) name)
+             status (when agent (:status @agent))]
          (cond (and (= command :activate) (or (nil? agent)
                                               (contains? #{:undeployed :deployed} status)))
                (activate-action manager name agent channel args)

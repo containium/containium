@@ -40,19 +40,13 @@
     nil))
 
 
-(defn- postprocess-row
-  [keywordize? row]
-  (reduce (fn [m [k v]]
-            (assoc m
-              (if keywordize? (keyword k) k)
-              (condp instance? v
-                Map (into {} v)
-                Set (into #{} v)
-                List (seq v)
-                ByteBuffer (.slice v)
-                v)))
-          {}
-          row))
+(defn- clojurify
+  [v]
+  (condp instance? v
+    Map  (into  {} v)
+    Set  (into #{} v)
+    List (seq v)
+    v))
 
 
 (defn- decode-resultset
@@ -62,8 +56,8 @@
       (->> (for [[^ColumnSpecification meta ^ByteBuffer column] (zipmap metas row)
                  :let [^AbstractType type (.type meta)
                        ^String name (.. meta name toString)]]
-             [name (.compose type column)])
-           (postprocess-row keywordize?)))))
+             [(if keywordize? (keyword name) #_else name) (clojurify (.compose type column))])
+           (into {})))))
 
 
 (defprotocol Encode

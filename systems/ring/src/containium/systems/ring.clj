@@ -7,7 +7,9 @@
   an API to a ring server."
   (:require [containium.exceptions :as ex]
             [containium.systems :refer (Startable)]
-            [boxure.core :as boxure]))
+            [containium.systems.ring-analytics :refer (wrap-ring-analytics)]
+            [boxure.core :as boxure]
+            [packthread.core :refer (+>)]))
 
 
 ;;; Public interface
@@ -45,17 +47,9 @@
                     "having a context-path nor a host-regex ("
                     (apply str (interpose ", " (map :name non-deterministic)))
                     ")."))))
-  (->> apps (sort-by #(get % :sort-value)) reverse))
-
-
-(defmacro matcher
-  "Evaluates to a match form, used by the make-app function."
-  [{:keys [host-regex context-path]} uri-sym host-sym]
-  (let [host-test `(re-matches ~(if host-regex (re-pattern host-regex)) ~host-sym)
-        context-test `(and (.startsWith ~uri-sym ~context-path)
-                           (= (get ~uri-sym ~(count context-path)) \/))]
-    `(and ~@(remove nil? (list (when host-regex host-test)
-                               (when context-path context-test))))))
+  (let [sorted (->> apps (sort-by #(get % :sort-value)) reverse)]
+    (log-fn (apply str "Sorted apps: " (interpose ", " (map :name apps))))
+    sorted))
 
 
 (defn- wrap-try-catch
@@ -70,33 +64,67 @@
         {:status 500 :body "Internal error."}))))
 
 
+(defn- wrap-trim-context
+  [handler context-path]
+  (fn [request]
+    (handler (update-in request [:uri] #(subs % (count context-path))))))
+
+
+(defn- wrap-call-in-box
+  [handler box]
+  (fn [request]
+    (boxure/call-in-box box (handler request))))
+
+
+(defn- wrap-matcher
+  [handler {:keys [host-regex context-path] :as ring-conf}]
+  (let [host-test (when-let [pattern (when host-regex (re-pattern host-regex))]
+                    (fn [request] (re-matches pattern (-> request :headers (get "host")))))
+        context-test (when context-path
+                       (fn [request]
+                         (and (.startsWith ^String (:uri request) context-path)
+                              (= (get (:uri request) (count context-path)) \/))))
+        all-tests (apply every-pred (remove nil? [host-test context-test]))]
+    (fn [request]
+      (when (all-tests request)
+        (handler request)))))
+
+
+(defn- wrap-log-request
+  [handler app-name log-fn]
+  (fn [request]
+    (log-fn (str "[" app-name "]") request)
+    (handler request)))
+
+
 (defn make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
-  [log-fn apps]
+  [log-fn ring-analytics apps]
   (let [handler (if-let [apps (seq (vals apps))]
                   (let [sorted (vec (sort-apps apps log-fn))
-                        fn-form `(fn [~'sorted ~'request]
-                                   (let [~'uri (:uri ~'request)
-                                         ~'host (-> ~'request :headers (get "host"))]
-                                     (or ~@(for [index (range (count sorted))
-                                                 :let [app (get sorted index)]]
-                                             `(when (matcher ~(:ring-conf app) ~'uri ~'host)
-                                                (let [~'app (get ~'sorted ~index)]
-                                                  (boxure/call-in-box
-                                                   (:box ~'app)
-                                                   (:handler-fn ~'app)
-                                                   ~(if-let [cp (-> app :ring-conf :context-path)]
-                                                      `(update-in ~'request [:uri]
-                                                                  #(subs % ~(count cp)))
-                                                      'request))))))))]
-                    (partial (eval fn-form) sorted))
+                        handlers (seq (map (fn [{:keys [ring-conf handler-fn box] :as app}]
+                                             (+> handler-fn
+                                                 (wrap-call-in-box box)
+                                                 (->> (wrap-ring-analytics ring-analytics (:name box)))
+                                                 (when-let [cp (:context-path ring-conf)]
+                                                   (wrap-trim-context cp))
+                                                 (when (:print-requests ring-conf)
+                                                   (wrap-log-request (:name box) println))
+                                                 (wrap-matcher ring-conf)))
+                                           sorted))
+                        all-handlers (apply some-fn handlers)
+                        miss-handler (wrap-ring-analytics ring-analytics "404" (constantly {:status 404}))]
+                    (fn [request]
+                      (or (all-handlers request)
+                          (miss-handler request))))
                   (constantly {:status 503 :body "no apps loaded"}))]
     (wrap-try-catch handler)))
 
 
-(defn- clean-ring-conf
-  "Updates the ring-conf, in order to ensure some properties of the values."
+(defn clean-ring-conf
+  "Updates the ring-conf, in order to ensure some properties of the values.
+   - Makes sure the context-path does not end with a / character."
   [ring-conf]
   (let [result ring-conf
         result (update-in result [:context-path]
@@ -112,7 +140,7 @@
         _ (assert (:handler ring-conf)
                   (log-fn ":ring app config requires a :handler, but ring-conf only contains: "
                           ring-conf))
-        handler-fn @(boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
+        handler-fn (boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))
         ;; Sorting value is the number of slashes in the context path and the time it is
         ;; deployed (actually, the time when this function is called). The more slashes and the

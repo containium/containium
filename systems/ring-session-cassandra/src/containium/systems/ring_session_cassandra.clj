@@ -13,25 +13,22 @@
                                                            bytes->bytebuffer)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
-            [clojure.core.cache :refer (ttl-cache-factory)]
             [clojure.java.io :refer (resource)])
-  (:import [org.apache.cassandra.cql3 QueryProcessor UntypedResultSet]
-           [java.util UUID]))
+  (:import [java.util UUID]))
 
 
-;;; SessionStore implementation based on an embedded Cassandra.
+;;; SessionStore implementation based on a Cassandra system.
 
 (def ^:private session-consistency :one)
 
 (defn- read-session-data
   [cassandra read-query key]
-  (when-let [^UntypedResultSet data (do-prepared cassandra read-query
-                                                 {:consistency session-consistency, :raw? true}
-                                                 [key])]
-    (when-not (.isEmpty data)
-      (-> (.. data one (getBytes "data") slice)
-          bytebuffer->bytes
-          thaw))))
+  (when-let [result (first (do-prepared cassandra read-query
+                                        {:consistency session-consistency} [key]))]
+    (-> (get result "data")
+        .slice
+        bytebuffer->bytes
+        thaw)))
 
 
 (defn- write-session-data
@@ -45,15 +42,12 @@
   (do-prepared cassandra remove-query {:consistency session-consistency} [key]))
 
 
-(defrecord EmbeddedCassandraStore [cache ttl cassandra read-q write-q remove-q]
+(defrecord CassandraStore [ttl-mins cassandra read-q write-q write-q-long remove-q]
   SessionStore
   (read-session [_ key]
-    ;; If the key is non-nil, try the cache or if that fails, try Cassandra.
-    ;; If both fail, or the key was nil, an empty session is returned.
-    (or (and key
-             (or (get (deref cache) key)
-                 (read-session-data cassandra read-q key)))
-        {}))
+    ;; If the key is non-nil, try Cassandra. If cassandra fails, or the key was nil, an empty
+    ;; session is returned.
+    (or (and key (read-session-data cassandra read-q key)) {}))
 
   (write-session [this key data]
     ;; Create a key, if necessary.
@@ -61,23 +55,22 @@
     ;; and the time it specifies is younger than the current time minus TTL,
     ;; and the session data has not changed within the handling of the request.
     (let [new-key (or key (str (UUID/randomUUID)))
-          new-data (if-not (and (get data ::last-db-write)
-                                (< (- (System/currentTimeMillis) (* ttl 60000))
-                                   (get data ::last-db-write))
+          new-data (if-not (and (get data :containium/last-db-write)
+                                (< (- (System/currentTimeMillis) (* ttl-mins 60000))
+                                   (get data :containium/last-db-write))
                                 (= data (read-session this key)))
-                     (assoc data ::last-db-write (System/currentTimeMillis))
+                     (assoc data :containium/last-db-write (System/currentTimeMillis))
                      data)]
       (when-not (= data new-data)
-        (write-session-data cassandra write-q new-key new-data))
-      (swap! cache assoc new-key new-data)
+        (let [q (if (get-in data [:noir :session/longlived]) write-q-long write-q)]
+          (write-session-data cassandra q new-key new-data)))
       new-key))
 
   (delete-session [_ key]
-    ;; Remove the session data from the cache and the database. Return nil, in
+    ;; Remove the session data from the database. Return nil, in
     ;; order to have the session cookie removed.
     (when key
-      (remove-session-data cassandra remove-q key)
-      (swap! cache dissoc key))
+      (remove-session-data cassandra remove-q key))
     nil))
 
 
@@ -88,21 +81,28 @@
     (write-schema cassandra (slurp (resource "cassandra-session-store.cql")))))
 
 
-(def embedded
+(def default
   (reify Startable
     (start [_ systems]
       (let [cassandra (:cassandra systems)
-            _ (assert cassandra (str "Embedded Cassandra Ring session store requires the embedded "
+            _ (assert cassandra (str "Cassandra Ring session store requires a "
                                      "Cassandra system, under the :cassandra key."))
             config (get-config (require-system Config systems) :session-store)
-            _ (println "Starting embedded Cassandra Ring session store, using config"
+            _ (println "Starting Cassandra Ring session store, using config"
                        config "...")
             _ (ensure-schema cassandra)
-            ttl (:ttl config)
+            ttl-mins (:ttl-mins config)
+            ttl-days (:ttl-days config)
+            _ (assert ttl-mins "Missing :ttl-mins config")
+            _ (assert ttl-days "Missing :ttl-days config")
             read-q (prepare cassandra "SELECT data FROM ring.sessions WHERE key = ?;")
-            write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* ttl 60 2)
+            ;; TTL in the database queure is twice as what is configured, as unchanged session
+            ;; data is only written once in TTL minutes to the database.
+            write-q (prepare cassandra (str "UPDATE ring.sessions USING TTL " (* 2 60 ttl-mins)
                                             " SET data = ? WHERE key = ?;"))
+            write-q-long (prepare cassandra
+                                  (str "UPDATE ring.sessions USING TTL " (* 60 60 24 ttl-days)
+                                       " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
-        (println "Embedded Cassandra Ring session store started.")
-        (EmbeddedCassandraStore. (atom (ttl-cache-factory {} :ttl (* ttl 60000)))
-                                 ttl cassandra read-q write-q remove-q)))))
+        (println "Cassandra Ring session store started.")
+        (CassandraStore. ttl-mins cassandra read-q write-q write-q-long remove-q)))))

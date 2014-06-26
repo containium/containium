@@ -7,7 +7,9 @@
   (:require [boxure.core :refer (boxure) :as boxure]
             [leiningen.core.project]
             [clojure.core.async :as async]
-            [containium.exceptions :as ex]))
+            [containium.exceptions :as ex]
+            [ring.util.codec] ; load codec, because it is shared with boxes
+            [postal.core]))
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -47,22 +49,29 @@
               boxure-config (if-let [module-isolates (:isolates module-config)]
                               (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
                               #_else boxure-config)
-              box (boxure (assoc boxure-config :debug? false) (.getClassLoader clojure.lang.RT) file)
+              box-debug (System/getenv "BOXDEBUG")
+              box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
+              injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
+                                                          (str "containium\\.(?!core|utils).*"
+                                                               "|ring\\.middleware.*"
+                                                               "|ring\\.util\\.codec.*"
+                                                               "|postal.*"
+                                                               "|org\\.httpkit.*"))]
+                                            (dosync (commute @#'clojure.core/*loaded-libs*
+                                                             #(apply conj % (keys injected))))
+                                            injected))
+              _ (when box-debug (prn "Loaded after namespace injection: " (boxure/eval box @#'clojure.core/*loaded-libs*)))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
                                 {:project project
                                  :active-profiles active-profiles
                                  :containium module-config})
-              start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
-                                              ~(:start module-config)))
-              forward-fn @(boxure/eval box '(do (require 'containium.systems)
-                                                containium.systems/forward-systems))]
+              start-fn (boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
+                                              ~(:start module-config)))]
           (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
-          (when (instance? Throwable forward-fn) (boxure/clean-and-stop box) (throw forward-fn))
           (try
-            (boxure/call-in-box box forward-fn systems)
-            (let [start-result (boxure/call-in-box box start-fn systems descriptor)]
+            (let [start-result (boxure/call-in-box box (start-fn systems descriptor))]
               (println "Module" name "started.")
               (assoc box :start-result start-result, :descriptor descriptor))
             (catch Throwable ex
@@ -80,15 +89,16 @@
   (let [module-config (-> box :project :containium)]
     (log-fn "Stopping module" name "...")
     (try
-      (let [stop-fn @(boxure/eval box
+      (let [stop-fn (boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
                                        ~(:stop module-config)))]
-        (boxure/call-in-box box stop-fn (:start-result box))
+        (boxure/call-in-box box (stop-fn (:start-result box)))
         :stopped)
       (catch Throwable ex
         (log-fn "Exception while stopping module" name ":" ex)
         (ex/exit-when-fatal ex)
         (.printStackTrace ex))
       (finally
+        (boxure.BoxureClassLoader/cleanThreadLocals)
         (boxure/clean-and-stop box)
         (log-fn "Module" name "stopped.")))))
