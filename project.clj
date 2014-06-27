@@ -29,11 +29,12 @@
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.2.0"]
                  [cc.qbits/alia "1.9.2"]
-                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]]
+                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.1.1"]
                  [clojurewerkz/elastisch "2.0.0"]
                  [com.maitria/packthread "0.1.1"]
-                 [com.draines/postal "1.11.1"]]
+                 [com.draines/postal "1.11.1"]
+                 [com.taoensso/timbre "3.2.1"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty

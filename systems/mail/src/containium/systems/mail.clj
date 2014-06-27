@@ -6,6 +6,7 @@
   "A mail sending system."
   (:require [containium.systems :refer (require-system Startable)]
             [containium.systems.config :as config :refer (Config)]
+            [containium.systems.logging :refer (SystemLogger info warn)]
             [postal.core :as postal]))
 
 
@@ -40,6 +41,8 @@
   postal
   (reify Startable
     (start [_ systems]
-      (let [config (config/get-config (require-system Config systems) :postal)]
-        (println "Starting Postal system, using config:" config)
+      (let [config (config/get-config (require-system Config systems) :postal)
+            logger (require-system SystemLogger systems)]
+        (info logger "Starting Postal system, using config:" config)
+        (warn (containium.systems.logging/get-logger logger "mail") "ALL YOUR BASE")
         (Postal. config)))))

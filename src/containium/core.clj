@@ -18,6 +18,7 @@
             [containium.systems.repl :as repl]
             [containium.systems.ring-analytics :as ring-analytics]
             [containium.systems.mail :as mail]
+            [containium.systems.logging :as logging2]
             [containium.utils.async :as async-util]
             [containium.exceptions :as ex]
             [containium.commands :as commands]
@@ -130,19 +131,21 @@
   [& [daemon? args]]
   (ex/register-default-handler)
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
+                              :logging logging2/logger
                               :mail mail/postal
-                              :cassandra cassandra/embedded12
-                              :elastic elastic/embedded
-                              :kafka kafka/embedded
-                              :session-store cass-session/default
-                              :ring-analytics ring-analytics/elasticsearch
-                              :http-kit http-kit/http-kit
-                              :jetty9 jetty9/jetty9
-                              :ring ring/distributed
-                              :modules modules/default-manager
-                              :fs deployer/directory
-                              :socket socket/socket
-                              :repl repl/nrepl]
+                              ;; :cassandra cassandra/embedded12
+                              ;; :elastic elastic/embedded
+                              ;; :kafka kafka/embedded
+                              ;; :session-store cass-session/default
+                              ;; :ring-analytics ring-analytics/elasticsearch
+                              ;; :http-kit http-kit/http-kit
+                              ;; :jetty9 jetty9/jetty9
+                              ;; :ring ring/distributed
+                              ;; :modules modules/default-manager
+                              ;; :fs deployer/directory
+                              ;; :socket socket/socket
+                              ;; :repl repl/nrepl
+                              ]
          ((if daemon? run-daemon #_else run) systems))
        (catch Exception ex
          (.printStackTrace ex))
