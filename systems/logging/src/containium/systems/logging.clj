@@ -25,8 +25,9 @@
   (:require [containium.systems :refer (Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
             [taoensso.timbre :as timbre]
-            [clojure.string :refer (upper-case)])
-  (:import [java.io PrintStream]))
+            [clojure.string :refer (upper-case)]
+            [clojure.java.io :refer (writer)])
+  (:import [java.io PrintStream OutputStream]))
 
 
 ;;; Public API for apps
@@ -118,7 +119,7 @@
 
 (defn mk-appender
   [sessions-atom prefix log-writer]
-  {:timestamp-pattern "yyyy-MMM-dd HH:mm:ss ZZ"
+  {:timestamp-pattern "yyyy-MM-dd HH:mm:ss,SSS"
    :appenders
    {:containium
     {:enabled? true
@@ -129,11 +130,11 @@
                             (str "[" (when prefix (str prefix "@")) ns "] " (::msg message))
                             (str (when prefix (str "[" prefix "] ")) message))]
              (when log-writer
-               (write-line log-writer (str timestamp " " (upper-case (name level)) " " prefixed)))
+               (write-line log-writer (str timestamp "  " (upper-case (name level)) "  " prefixed)))
              (when sessions-atom
                (doseq [log-writer @sessions-atom]
                  (write-line log-writer
-                             (str timestamp " " (upper-case (name level)) " " prefixed))))))}}})
+                             (str timestamp "  " (upper-case (name level)) "  " prefixed))))))}}})
 
 
 ;; sessions = (atom #{LogWriter})
@@ -178,8 +179,31 @@
     (swap! levels assoc app-name level)))
 
 
+(def ^:private stdout (System/out))
+(def ^:private linesep (System/getProperty "line.separator"))
+
+(defn- bytes->string
+  [^bytes bytes off len]
+  (let [s (String. bytes off len)]
+    (if (.endsWith s linesep)
+      (subs s 0 (- (count s) (count linesep)))
+      s)))
+
 (def logger
   (reify Startable
     (start [this systems]
-      (let [sessions-atom (atom #{System/out})]
-        (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))))))
+      (let [sessions-atom (atom #{stdout})
+            logger (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))
+            out (proxy [OutputStream] []
+                  (write [b off len]
+                    (let [s (bytes->string b off len)]
+                      (when (seq s) (log-console logger :info (str "[stdout] " s))))))
+            err (proxy [OutputStream] []
+                  (write [b off len]
+                    (let [s (bytes->string b off len)]
+                      (when (seq s) (log-console logger :error (str "[stderr] " s))))))]
+        (System/setOut (PrintStream. out))
+        (System/setErr (PrintStream. err))
+        (alter-var-root #'clojure.core/*out* (constantly (writer out)))
+        (alter-var-root #'clojure.core/*err* (constantly (writer err)))
+        logger))))
