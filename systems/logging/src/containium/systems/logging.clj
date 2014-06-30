@@ -3,23 +3,53 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns containium.systems.logging
+  "A logging system for containium systems and modules.
+
+  The modules simply use the Logging interface, and use the level
+  macros, such as `info` and `warn`, for logging on the returned
+  AppLogger.
+
+  Systems have some more options. The AppLogger interface can be used
+  directly, just as a module would. But they can also add more
+  LogWriter instances, called sessions, which receive all console
+  logging. LogWriter is an abstraction around types that can write a
+  line to some stream or channel.
+
+  Furthermore, systems can create CommandLogger instances, which are
+  used by (other) systems for logging messages to only the caller of
+  the command.
+
+  Finally, the SystemLogger interface allows for setting the log-level
+  per module. This overrides the global log-level, although the timbre
+  compile-time level (if set) still takes precedence."
   (:require [containium.systems :refer (Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
-            [taoensso.timbre :as timbre])
+            [taoensso.timbre :as timbre]
+            [clojure.string :refer (upper-case)])
   (:import [java.io PrintStream]))
 
 
 ;;; Public API for apps
 
 (defprotocol Logging
-  (get-logger [this app-name]))
+  (get-logger [this app-name]
+    "Retrieve a logger for a module. This returns an AppLogger instance,
+    which can be used to log messages to the console. The most
+    convenient way of logging is calling one of the level macros, such
+    as `info` or `warn`."))
 
 
 (defprotocol AppLogger
-  (log-console [this level msg] [this level ns msg]))
+  (log-console [this level msg] [this level ns msg]
+    "Log the given message on the given level. Optionally one can supply
+    the namespace the log statment is executed in. This is done
+    automatically by the level macros, such as `info` and `warn`."))
 
 
 (defmacro log*
+  "Used by the level macros and calls the `log-console` function with
+  the namespace the macro is compiled in. It is not recommended to
+  call this directly."
   [app-logger level & vals]
   (let [ns (str *ns*)]
     `(log-console ~app-logger ~level ~ns (apply str (interpose " " [~@vals])))))
@@ -32,49 +62,95 @@
            `(log* ~app-logger# ~~level ~@vals#))))
 
 
+(defn refer-logging
+  "Shorthand for:
+  (require
+    '[containium.systems.logging :as logging
+      :refer (trace debug info warn error fatal report)])"
+  []
+  (require
+   '[containium.systems.logging :as logging
+     :refer (trace debug info warn error fatal report)]))
+
+
 ;;; Systems API for systems
 
 (defprotocol SystemLogger
-  (add-session [this out])
-  (remove-session [this out])
-  (get-command-logger [this out]))
+  (add-session [this log-writer]
+    "Add a LogWriter to the console sessions. Make sure the underlying
+    stream IO is buffered, so it does not hinder the logging. The
+    following classes are already extending LogWriter: PrintStream.")
+
+  (remove-session [this log-writer]
+    "Removes a LogWriter from the console sessions.")
+
+  (get-command-logger [this log-writer]
+    "Creates a CommandLogger instance, which can be used for logging
+    messages to only the command invoker (i.e., to the given
+    LogWriter), or both the console and command invoker.")
+
+  (set-level [this app-name level]
+    "Overrides the currently set log-level of timbre for a logger
+    retrieved using the Logging protocol. If the level argument is
+    nil, the override is removed."))
+
 
 (defprotocol CommandLogger
-  (log-command [this level msg])
-  (log-all [this level msg]))
+  (log-command [this level msg]
+    "Log a message to the caller of the command.")
+
+  (log-all [this level msg]
+    "Log a message to both the caller of the command and the console
+    sessions."))
+
+
+(defprotocol LogWriter
+  (write-line [this line]))
 
 
 ;;; Default implementation
 
+(extend-type java.io.PrintStream
+  LogWriter
+  (write-line [^PrintStream this line]
+    (.println this line)))
+
+
 (defn mk-appender
-  [sessions-atom prefix ^PrintStream out]
+  [sessions-atom prefix log-writer]
   {:timestamp-pattern "yyyy-MMM-dd HH:mm:ss ZZ"
    :appenders
    {:containium
     {:enabled? true
      :async? false
-     :fn (fn [{:keys [args timestamp]}]
+     :fn (fn [{:keys [args timestamp level]}]
            (let [message (first args)
                  prefixed (if-let [ns (and (map? message) (::ns message))]
                             (str "[" (when prefix (str prefix "@")) ns "] " (::msg message))
                             (str (when prefix (str "[" prefix "] ")) message))]
-             (when out
-               (.println out (str timestamp " " prefixed)))
+             (when log-writer
+               (write-line log-writer (str timestamp " " (upper-case (name level)) " " prefixed)))
              (when sessions-atom
-               (doseq [^PrintStream out @sessions-atom]
-                 (.println out (str timestamp " " prefixed))))))}}})
+               (doseq [log-writer @sessions-atom]
+                 (write-line log-writer
+                             (str timestamp " " (upper-case (name level)) " " prefixed))))))}}})
 
 
-;; sessions = (atom #{PrintStream})
-(defrecord Logger [sessions console-appender]
+;; sessions = (atom #{LogWriter})
+;; levels = (atom {"app-name", :level})
+(defrecord Logger [sessions levels console-appender]
   Logging
   (get-logger [this app-name]
     (let [appender (mk-appender sessions app-name nil)]
       (reify AppLogger
         (log-console [_ level msg]
-          (timbre/log appender level msg))
+          (if-let [log-level (get @levels app-name)]
+            (timbre/with-log-level log-level (timbre/log appender level msg))
+            (timbre/log appender level msg)))
         (log-console [_ level ns msg]
-          (timbre/log appender level {::ns ns ::msg msg})))))
+          (if-let [log-level (get @levels app-name)]
+            (timbre/with-log-level log-level (timbre/log appender level {::ns ns ::msg msg}))
+            (timbre/log appender level {::ns ns ::msg msg}))))))
 
   AppLogger
   (log-console [_ level msg]
@@ -83,24 +159,27 @@
     (timbre/log console-appender level {::ns ns ::msg msg}))
 
   SystemLogger
-  (add-session [_ out]
-    (swap! sessions conj out))
+  (add-session [_ log-writer]
+    (swap! sessions conj log-writer))
 
-  (remove-session [_ out]
-    (swap! sessions disj out))
+  (remove-session [_ log-writer]
+    (swap! sessions disj log-writer))
 
-  (get-command-logger [this out]
-    (let [all-appender (mk-appender sessions nil out)
-          command-appender (mk-appender nil nil out)]
+  (get-command-logger [this log-writer]
+    (let [all-appender (mk-appender sessions nil log-writer)
+          command-appender (mk-appender nil nil log-writer)]
       (reify CommandLogger
         (log-command [_ level msg]
           (timbre/log command-appender level msg))
         (log-all [_ level msg]
-          (timbre/log all-appender level msg))))))
+          (timbre/log all-appender level msg)))))
+
+  (set-level [this app-name level]
+    (swap! levels assoc app-name level)))
 
 
 (def logger
   (reify Startable
     (start [this systems]
       (let [sessions-atom (atom #{System/out})]
-        (Logger. sessions-atom (mk-appender sessions-atom nil nil))))))
+        (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))))))
