@@ -85,10 +85,13 @@
   (remove-session [this log-writer]
     "Removes a LogWriter from the console sessions.")
 
-  (get-command-logger [this log-writer]
+  (command-logger [this log-writer command] [this log-writer command done-fn]
     "Creates a CommandLogger instance, which can be used for logging
     messages to only the command invoker (i.e., to the given
-    LogWriter), or both the console and command invoker.")
+    LogWriter), or both the console and command invoker. The command
+    parameter is just a string, which is used for the formatting of
+    the log statement. Optionally one can supply a function that is
+    called whenever the command is done.")
 
   (set-level [this app-name level]
     "Overrides the currently set log-level of timbre for a logger
@@ -97,16 +100,52 @@
 
 
 (defprotocol CommandLogger
-  (log-command [this level msg]
+  (log-command [this level msg] [this level ns msg]
     "Log a message to the caller of the command.")
 
-  (log-all [this level msg]
+  (log-all [this level msg] [this level ns msg]
     "Log a message to both the caller of the command and the console
-    sessions."))
+    sessions.")
+
+  (done [this]
+    "Call this function to indicate the command is done. This will
+    trigger the callback set by the creator of the CommandLogger."))
 
 
 (defprotocol LogWriter
   (write-line [this line]))
+
+
+(defmacro command-log*
+  "Used by the system level macros and calls the `log-command` or
+  `log-all` function with the namespace the macro is compiled in. It
+  is not recommended to call this directly."
+  [app-logger level fn & vals]
+  (let [ns (str *ns*)
+        fn (symbol (str "log-" fn))]
+    `(~fn ~app-logger ~level ~ns (apply str (interpose " " [~@vals])))))
+
+
+(doseq [level timbre/levels-ordered
+        fn ['all 'command]]
+  (eval `(defmacro ~(symbol (str (name level) "-" fn))
+           ~(str "Log the given values on the " (name level) " level to " ~fn)
+           [app-logger# & vals#]
+           `(command-log* ~app-logger# ~~level ~~fn ~@vals#))))
+
+(defn refer-command-logging
+  "Shorthand for:
+  (require
+    '[containium.systems.logging :as logging
+      :refer (trace-all debug-all info-all warn-all error-all fatal-all report-all
+              trace-command debug-command info-command warn-command error-command
+              fatal-command report-command)])"
+  []
+  (require
+   '[containium.systems.logging :as logging
+     :refer (trace-all debug-all info-all warn-all error-all fatal-all report-all
+                       trace-command debug-command info-command warn-command error-command
+                       fatal-command report-command)]))
 
 
 ;;; Default implementation
@@ -132,9 +171,10 @@
              (when log-writer
                (write-line log-writer (str timestamp "  " (upper-case (name level)) "  " prefixed)))
              (when sessions-atom
-               (doseq [log-writer @sessions-atom]
-                 (write-line log-writer
-                             (str timestamp "  " (upper-case (name level)) "  " prefixed))))))}}})
+               (doseq [session-log-writer @sessions-atom]
+                 (when-not (= session-log-writer log-writer)
+                   (write-line session-log-writer
+                               (str timestamp "  " (upper-case (name level)) "  " prefixed)))))))}}})
 
 
 ;; sessions = (atom #{LogWriter})
@@ -166,14 +206,20 @@
   (remove-session [_ log-writer]
     (swap! sessions disj log-writer))
 
-  (get-command-logger [this log-writer]
-    (let [all-appender (mk-appender sessions nil log-writer)
-          command-appender (mk-appender nil nil log-writer)]
+  (command-logger [this log-writer command] [this log-writer command done-fn]
+    (let [all-appender (mk-appender sessions command log-writer)
+          command-appender (mk-appender nil command log-writer)]
       (reify CommandLogger
         (log-command [_ level msg]
           (timbre/log command-appender level msg))
+        (log-command [_ level ns msg]
+          (timbre/log command-appender level {::ns ns ::msg msg}))
         (log-all [_ level msg]
-          (timbre/log all-appender level msg)))))
+          (timbre/log all-appender level msg))
+        (log-all [_ level ns msg]
+          (timbre/log all-appender level {::ns ns ::msg msg}))
+        (done [_]
+          (when done-fn (done-fn))))))
 
   (set-level [this app-name level]
     (swap! levels assoc app-name level)))
@@ -188,6 +234,7 @@
     (if (.endsWith s linesep)
       (subs s 0 (- (count s) (count linesep)))
       s)))
+
 
 (def logger
   (reify Startable
@@ -207,3 +254,14 @@
         (alter-var-root #'clojure.core/*out* (constantly (writer out)))
         (alter-var-root #'clojure.core/*err* (constantly (writer err)))
         logger))))
+
+
+(defn stdout-command-logger
+  "Create a CommandLogger that logs to standard out."
+  ([logger command]
+     (command-logger logger stdout command))
+  ([logger command done-fn]
+     (command-logger logger stdout command done-fn)))
+
+
+(def with-log-level timbre/with-log-level)

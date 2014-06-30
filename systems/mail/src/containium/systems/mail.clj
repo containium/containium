@@ -6,8 +6,9 @@
   "A mail sending system."
   (:require [containium.systems :refer (require-system Startable)]
             [containium.systems.config :as config :refer (Config)]
-            [containium.systems.logging :refer (SystemLogger info warn)]
+            [containium.systems.logging :refer (SystemLogger refer-logging)]
             [postal.core :as postal]))
+(refer-logging)
 
 
 ;;; The public API
@@ -20,12 +21,13 @@
 
 ;;; An SMTP implementation using Postal
 
-(defrecord Postal [smtp]
+(defrecord Postal [logger smtp]
   Mail
   (send-message [this from to subject body]
     (send-message this from to subject body nil))
 
   (send-message [this from to subject body opts]
+    (debug logger "Sending email from" from "to" to "with subject" subject "using options" opts)
     (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts))))
 
 
@@ -44,5 +46,4 @@
       (let [config (config/get-config (require-system Config systems) :postal)
             logger (require-system SystemLogger systems)]
         (info logger "Starting Postal system, using config:" config)
-        (warn (containium.systems.logging/get-logger logger "mail") "ALL YOUR BASE")
-        (Postal. config)))))
+        (Postal. logger config)))))
