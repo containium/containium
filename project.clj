@@ -11,7 +11,7 @@
                  [boxure "0.1.0-SNAPSHOT"]
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
-                 [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
+                 [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
@@ -43,6 +43,7 @@
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
+             "-Djava.net.preferIPv4Stack=true"
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
