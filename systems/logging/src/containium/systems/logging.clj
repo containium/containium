@@ -122,7 +122,7 @@
   is not recommended to call this directly."
   [app-logger level fn & vals]
   (let [ns (str *ns*)
-        fn (symbol (str "log-" fn))]
+        fn (symbol "containium.systems.logging" (str "log-" fn))]
     `(~fn ~app-logger ~level ~ns (apply str (interpose " " [~@vals])))))
 
 
