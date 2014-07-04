@@ -112,6 +112,8 @@
     trigger the callback set by the creator of the CommandLogger."))
 
 
+;;---TODO Add `write-exception` to this? In order to handle exceptions in a
+;;        special way, such as squash.io?
 (defprotocol LogWriter
   (write-line [this line]))
 
@@ -127,9 +129,9 @@
 
 
 (doseq [level timbre/levels-ordered
-        fn ['all 'command]]
+        fn ["all" "command"]]
   (eval `(defmacro ~(symbol (str (name level) "-" fn))
-           ~(str "Log the given values on the " (name level) " level to " ~fn)
+           ~(str "Log the given values on the " (name level) " level to " fn)
            [app-logger# & vals#]
            `(command-log* ~app-logger# ~~level ~~fn ~@vals#))))
 
@@ -165,16 +167,25 @@
      :async? false
      :fn (fn [{:keys [args timestamp level]}]
            (let [message (first args)
-                 prefixed (if-let [ns (and (map? message) (::ns message))]
-                            (str "[" (when prefix (str prefix "@")) ns "] " (::msg message))
-                            (str (when prefix (str "[" prefix "] ")) message))]
+                 level (format "%5S" (name level))
+                 raw? (and (map? message) (::raw message))
+                 ns (or (and (map? message) (::ns message)) nil)
+                 message (or (and (map? message) (::msg message)) message)
+                 text (if-not raw?
+                        (as-> message t
+                              (if (or ns prefix) (str "] " t) t)
+                              (str ns t)
+                              (if (and ns prefix) (str "@" t) t)
+                              (str prefix t)
+                              (if (or ns prefix) (str "[" t) t)
+                              (str timestamp " " level " " t))
+                        (str message))]
              (when log-writer
-               (write-line log-writer (str timestamp "  " (upper-case (name level)) "  " prefixed)))
+               (write-line log-writer text))
              (when sessions-atom
                (doseq [session-log-writer @sessions-atom]
                  (when-not (= session-log-writer log-writer)
-                   (write-line session-log-writer
-                               (str timestamp "  " (upper-case (name level)) "  " prefixed)))))))}}})
+                   (write-line session-log-writer text))))))}}})
 
 
 ;; sessions = (atom #{LogWriter})
@@ -206,7 +217,7 @@
   (remove-session [_ log-writer]
     (swap! sessions disj log-writer))
 
-  (command-logger [this log-writer command] [this log-writer command done-fn]
+  (command-logger [_ log-writer command done-fn]
     (let [all-appender (mk-appender sessions command log-writer)
           command-appender (mk-appender nil command log-writer)]
       (reify CommandLogger
@@ -220,6 +231,8 @@
           (timbre/log all-appender level {::ns ns ::msg msg}))
         (done [_]
           (when done-fn (done-fn))))))
+  (command-logger [this log-writer command]
+    (command-logger this log-writer command nil))
 
   (set-level [this app-name level]
     (swap! levels assoc app-name level)))
@@ -236,23 +249,39 @@
       s)))
 
 
+(defn- override-std
+  "Override standard out. The type argument can be one of:
+
+    :system - overrides the System/out and System/err streams
+
+    :core - overrides the clojure.core/*out* and *err* bindings
+
+    :both - both :system and :core."
+  [logger type]
+  (let [out (proxy [OutputStream] []
+              (write [b off len]
+                (let [s (bytes->string b off len)]
+                  (when (seq s)
+                    (log-console logger :info {::raw true ::msg (str "STDOUT: " s)})))))
+        err (proxy [OutputStream] []
+              (write [b off len]
+                (let [s (bytes->string b off len)]
+                  (when (seq s)
+                    (log-console logger :error {::raw true ::msg (str "STDERR: " s)})))))]
+    (when (or (= type :both) (= type :system))
+      (System/setOut (PrintStream. out))
+      (System/setErr (PrintStream. err)))
+    (when (or (= type :both) (= type :core))
+      (alter-var-root #'clojure.core/*out* (constantly (writer out)))
+      (alter-var-root #'clojure.core/*err* (constantly (writer err))))))
+
+
 (def logger
   (reify Startable
     (start [this systems]
       (let [sessions-atom (atom #{stdout})
-            logger (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))
-            out (proxy [OutputStream] []
-                  (write [b off len]
-                    (let [s (bytes->string b off len)]
-                      (when (seq s) (log-console logger :info (str "[stdout] " s))))))
-            err (proxy [OutputStream] []
-                  (write [b off len]
-                    (let [s (bytes->string b off len)]
-                      (when (seq s) (log-console logger :error (str "[stderr] " s))))))]
-        (System/setOut (PrintStream. out))
-        (System/setErr (PrintStream. err))
-        (alter-var-root #'clojure.core/*out* (constantly (writer out)))
-        (alter-var-root #'clojure.core/*err* (constantly (writer err)))
+            logger (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))]
+        (override-std logger :both)
         logger))))
 
 
@@ -264,4 +293,9 @@
      (command-logger logger stdout command done-fn)))
 
 
-(def with-log-level timbre/with-log-level)
+(defmacro with-log-level
+  "Override the log-level for the statements within the body. This is
+  only useful for systems, not for apps (as they have there own
+  timbre, or not)."
+  [level & body]
+  `(timbre/with-log-level ~level ~@body))

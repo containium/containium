@@ -8,8 +8,12 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring box->ring-app make-app)]
             [containium.systems.ring-analytics :refer (Analytics)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
             [classlojure.core :refer (with-classloader)]
             [org.httpkit.server :as httpkit]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; Patch http-kit AsyncChannel, in order to use the correct classloader.
@@ -33,40 +37,41 @@
   (on-close [ch callback] (.setCloseHandler ch (wrap-callback-context-fn callback))))
 
 
-;;; Standard HTTP-Ki implementation.
+;;; Standard HTTP-Kit implementation.
 
-(defrecord HttpKit [stop-fn app apps ring-analytics]
+(defrecord HttpKit [stop-fn app apps ring-analytics logger]
   Ring
-  (upstart-box [_ name box log-fn]
-    (log-fn "Adding module" name "to HTTP-kit handler.")
-    (->> (box->ring-app name box log-fn)
+  (upstart-box [_ name box command-logger]
+    (info-all command-logger "Adding module" name "to HTTP-kit handler.")
+    (->> (box->ring-app name box command-logger)
          (swap! apps assoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
-  (remove-box [_ name log-fn]
-    (log-fn "Removing module" name "from HTTP-kit handler.")
+  (remove-box [_ name command-logger]
+    (info-all command-logger  "Removing module" name "from HTTP-kit handler.")
     (->> (swap! apps dissoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
 
   Stoppable
   (stop [_]
-    (println "Stopping HTTP-kit server...")
+    (info logger "Stopping HTTP-kit server...")
     (stop-fn)
-    (println "Stopped HTTP-kit server.")))
+    (info logger "Stopped HTTP-kit server.")))
 
 
 (def http-kit
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :http-kit)
-            _ (println "Starting HTTP-kit server, using config" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting HTTP-kit server, using config" config)
             ring-analytics (require-system Analytics systems)
             app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             stop-fn (httpkit/run-server app-fn config)]
-        (println "HTTP-Kit server started.")
-        (HttpKit. stop-fn app (atom {}) ring-analytics)))))
+        (info logger "HTTP-Kit server started.")
+        (HttpKit. stop-fn app (atom {}) ring-analytics logger)))))
 
 
 ;;; HTTP-Kit implementation for testing.

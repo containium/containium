@@ -8,43 +8,48 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring box->ring-app make-app)]
             [containium.systems.ring-analytics :refer (Analytics)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
             [ring.adapter.jetty9 :as jetty9]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; Normal implementation.
 
-(defrecord Jetty9 [server app apps ring-analytics]
+(defrecord Jetty9 [server app apps ring-analytics logger]
   Ring
-  (upstart-box [_ name box log-fn]
-    (log-fn "Adding module" name "to Jetty9 handler.")
-    (->> (box->ring-app name box log-fn)
+  (upstart-box [_ name box command-logger]
+    (info-all command-logger "Adding module" name "to Jetty9 handler.")
+    (->> (box->ring-app name box command-logger)
          (swap! apps assoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
-  (remove-box [_ name log-fn]
-    (log-fn "Removing module" name "from Jetty9 handler.")
+  (remove-box [_ name command-logger]
+    (info-all command-logger "Removing module" name "from Jetty9 handler.")
     (->> (swap! apps dissoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
 
   Stoppable
   (stop [_]
-    (println "Stopping Jetty9 server...")
+    (info logger "Stopping Jetty9 server...")
     (.stop server)
-    (println "Stopped Jetty9 server.")))
+    (info logger "Stopped Jetty9 server.")))
 
 
 (def jetty9
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :jetty9)
-            _ (println "Starting Jetty9 server, using config" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting Jetty9 server, using config" config)
             ring-analytics (require-system Analytics systems)
             app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             server (jetty9/run-jetty app-fn config)]
-        (println "Jetty9 server started.")
-        (Jetty9. server app (atom {}) ring-analytics)))))
+        (info logger "Jetty9 server started.")
+        (Jetty9. server app (atom {}) ring-analytics logger)))))
 
 
 ;;; Test implementation.

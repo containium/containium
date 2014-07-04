@@ -51,7 +51,7 @@
     "Try to undeploy the module with the specified name. When the
     deactivation is complete, `done` is called on the command-logger.")
 
-  (kill! [this name] [this name channel]
+  (kill! [this name command-logger]
     "Kills a module, whatever it's status. When the kill is complete,
     `done` is called on the command-logger.")
 
@@ -60,14 +60,13 @@
     management events. Please untap or close taps when they won't be
     read from anymore.")
 
-  (versions [this name] [this name channel]
+  (versions [this name command-logger]
     "Prints the *-Version MANIFEST entries it can find in the classpath
     of the module. The following keys are filtered out:
     Manifest-Version Implementation-Version Ant-Version
-    Specification-Version Archiver-Version Bundle-Version. Returns an
-    async channel on which the response messages are put. Optionally,
-    one can supply this channel. The channel is closed after the
-    printing of the versions."))
+    Specification-Version Archiver-Version Bundle-Version. The info is
+    logged through the given command-logger, on which `done` is called
+    after all the info has been given."))
 
 
 (defn module-descriptor
@@ -154,47 +153,46 @@
   [{:keys [name descriptor error] :as module} {:keys [systems] :as manager} command-logger
    new-descriptor]
   (if-not error
-    (let [log (partial logging/log-all command-logger :info)]
-      (if-let [descriptor (or new-descriptor descriptor)]
-        (try
-          (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
-                boxure-config (-> (get-config (-> manager :systems :config) :modules)
-                                  (assoc :profiles profiles))]
-            ;; Try to start the box.
-            (if-let [box (start-box descriptor boxure-config (:systems manager) log)]
-              (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))
-                    ring-name (gensym name)]
-                ;; Register it with ring, if applicable.
-                (when (-> box :project :containium :ring)
-                  (upstart-box (-> manager :systems :ring) ring-name box log))
-                (info-all command-logger "Module" name "successfully deployed.")
-                (assoc module :box box :descriptor descriptor :ring-name ring-name))
-              ;; else if box failed to start.
-              (throw (Exception. (str "Box " name " failed to start.")))))
-          (catch Throwable ex
-            (error (:logging systems) (with-out-str (print-cause-trace ex)))
-            (error-all command-logger "Module" name "failed to deploy:" (.getMessage ex))
-            (assoc module :error true :descriptor descriptor)))
-        (do (error-command command-logger "Module" name
-                           "is new to containium, initial descriptor required.")
-            (assoc module :error true))))
+    (if-let [descriptor (or new-descriptor descriptor)]
+      (try
+        (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
+              boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                                (assoc :profiles profiles))]
+          ;; Try to start the box.
+          (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
+            (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))
+                  ring-name (gensym name)]
+              ;; Register it with ring, if applicable.
+              (when (-> box :project :containium :ring)
+                (upstart-box (-> manager :systems :ring) ring-name box command-logger))
+              (info-all command-logger "Module" name "successfully deployed.")
+              (assoc module :box box :descriptor descriptor :ring-name ring-name))
+            ;; else if box failed to start.
+            (throw (Exception. (str "Box " name " failed to start.")))))
+        (catch Throwable ex
+          (error (:logging systems) (with-out-str (print-cause-trace ex)))
+          (error-all command-logger "Module" name "failed to deploy:" (.getMessage ex))
+          (assoc module :error true :descriptor descriptor)))
+      (do (error-command command-logger "Module" name
+                         "is new to containium, initial descriptor required.")
+          (assoc module :error true)))
     module))
 
 
 (defn- do-undeploy
   ([module manager command-logger]
      (do-undeploy module manager command-logger nil))
-  ([{:keys [name box ring-name error] :as module} manager channel old]
-     (let [log (partial logging/log-all command-logger :info)]
-       (if-not error
-         (if (do (when (-> (or (:box old) box) :project :containium :ring)
-                   (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name) log))
-                 (stop-box name (or (:box old) box) log))
-           (do (info-all command-logger "Module" name "successfully undeployed.")
-               (if old module (dissoc module :box)))
-           (do (error-all command-logger "Module" name "failed to undeploy.")
-               (-> (if old module (dissoc module :box)) (assoc :error true))))
-         module))))
+  ([{:keys [name box ring-name error] :as module} manager command-logger old]
+     (if-not error
+       (if (do (when (-> (or (:box old) box) :project :containium :ring)
+                 (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name)
+                             command-logger))
+               (stop-box name (or (:box old) box) command-logger))
+         (do (info-all command-logger "Module" name "successfully undeployed.")
+             (if old module (dissoc module :box)))
+         (do (error-all command-logger "Module" name "failed to undeploy.")
+             (-> (if old module (dissoc module :box)) (assoc :error true))))
+       module)))
 
 
 ;;; Protocol implementation functions.
@@ -245,15 +243,14 @@
 
 (defn- kill-action
   [{:keys [systems agents] :as manager} agent command-logger]
-  (let [{:keys [box name status]} @agent
-        log (partial log-all command-logger :info)]
+  (let [{:keys [box name status]} @agent]
     (fire-event manager :kill name)
     (info-all command-logger "Killing module" name "...")
     (swap! agents dissoc name)
     (when box
       (when (-> box :project :containium :ring)
-        (remove-box (:ring systems) (:ring-name name) log))
-      (stop-box name box log))
+        (remove-box (:ring systems) (:ring-name name) command-logger))
+      (stop-box name box command-logger))
     (info-all command-logger  "Module" name "successfully killed.")
     (logging/done command-logger)))
 
@@ -290,14 +287,16 @@
 (defn- deactivate-all
   [manager names]
   (let [logger (-> manager :systems :logging)
+        command-logger (logging/stdout-command-logger logger "deactivate-all")
         timeoutc (async/timeout 90000) ;;---TODO Make this configurable?
         eventsc (async/chan)]
     (async/tap (event-mult manager) eventsc)
-    (doseq [name names] (deactivate! manager name))
+    (info logger "Deactivating all modules...")
+    (doseq [name names] (deactivate! manager name command-logger))
     (<!! (async/go-loop [left (set names)]
            (if (empty? left)
              (info logger "Deactivated all modules.")
-             (let [[val channel] (async/alts! eventc timeoutc)]
+             (let [[val channel] (async/alts! [eventsc timeoutc])]
                (if (= channel timeoutc)
                  (warn logger "Deactivation of all modules timed out. The following modules could"
                        "not be undeployed:" (apply str (interpose ", " left)))
@@ -305,8 +304,11 @@
                    (if (= type :finished)
                      (case (:status data)
                        :undeployed (recur (disj left name))
-                       :deployed (do (deactivate! manager name) (recur (conj left name))))
-                     (recur left))))))))))
+                       :deployed (do (deactivate! manager name command-logger)
+                                     (recur (conj left name))))
+                     (recur left))))))))
+    (async/untap (event-mult manager) eventsc)
+    (async/close! eventsc)))
 
 
 (defn- versions*

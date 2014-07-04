@@ -8,38 +8,43 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.ring :refer (Ring box->ring-app make-app)]
             [containium.systems.ring-analytics :refer (Analytics)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
             [netty.ring.adapter :as netty]))
+(refer-logging)
+(refer-command-logging)
 
 
-(defrecord Netty [stop-fn app apps ring-analytics]
+(defrecord Netty [stop-fn app apps ring-analytics logger]
   Ring
-  (upstart-box [_ name box log-fn]
-    (log-fn "Adding module" name "to Netty handler.")
-    (->> (box->ring-app name box log-fn)
+  (upstart-box [_ name box command-logger]
+    (info-all command-logger "Adding module" name "to Netty handler.")
+    (->> (box->ring-app name box command-logger)
          (swap! apps assoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
-  (remove-box [_ name log-fn]
-    (println "Removing module" name "from Netty handler.")
+  (remove-box [_ name command-logger]
+    (info-all command-logger "Removing module" name "from Netty handler.")
     (->> (swap! apps dissoc name)
-         (make-app log-fn ring-analytics)
+         (make-app command-logger ring-analytics)
          (reset! app)))
 
   Stoppable
   (stop [_]
-    (println "Stopping Netty server...")
+    (info logger "Stopping Netty server...")
     (stop-fn)
-    (println "Stopped Netty server.")))
+    (info logger "Stopped Netty server.")))
 
 
 (def netty
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :netty)
-            _ (println "Starting Netty server, using config" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting Netty server, using config" config)
             ring-analytics (require-system Analytics systems)
             app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             stop-fn (netty/start-server app-fn config)]
-        (println "Netty server started.")
-        (Netty. stop-fn app (atom {}) ring-analytics)))))
+        (info logger "Netty server started.")
+        (Netty. stop-fn app (atom {}) ring-analytics logger)))))

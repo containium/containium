@@ -7,9 +7,11 @@
   (:require [boxure.core :refer (boxure) :as boxure]
             [leiningen.core.project]
             [clojure.core.async :as async]
+            [containium.systems.logging :as logging :refer (refer-command-logging)]
             [containium.exceptions :as ex]
             [ring.util.codec] ; load codec, because it is shared with boxes
             [postal.core]))
+(refer-command-logging)
 
 (def meta-merge #'leiningen.core.project/meta-merge)
 
@@ -38,13 +40,13 @@
 
 (defn start-box
   "The logic for starting a box. Returns the started box."
-  [{:keys [name file] :as descriptor} boxure-config systems log-fn]
-  (log-fn "Starting module" name "using file" file "...")
+  [{:keys [name file] :as descriptor} boxure-config systems command-logger]
+  (info-all command-logger "Starting module" name "using file" file "...")
   (try
     (let [project (boxure/file-project file (:profiles descriptor))]
       (if-let [errors (seq (check-project project))]
-        (apply log-fn "Could not start module" name "for the following reasons:\n  "
-               (interpose "\n  " errors))
+        (error-all command-logger "Could not start module" name "for the following reasons:\n  "
+                   (apply str (interpose "\n  " errors)))
         (let [module-config (meta-merge (:containium project) (:containium descriptor))
               boxure-config (if-let [module-isolates (:isolates module-config)]
                               (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
@@ -60,7 +62,8 @@
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
                                             injected))
-              _ (when box-debug (prn "Loaded after namespace injection: " (boxure/eval box @#'clojure.core/*loaded-libs*)))
+              _ (trace-all command-logger "Loaded after namespace injection: "
+                           (boxure/eval box @#'clojure.core/*loaded-libs*))
               active-profiles (-> (meta project) :active-profiles set)
               descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
                                 descriptor ; descriptor overrides implicits
@@ -72,7 +75,7 @@
           (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
           (try
             (let [start-result (boxure/call-in-box box (start-fn systems descriptor))]
-              (println "Module" name "started.")
+              (info-all command-logger "Module" name "started.")
               (assoc box :start-result start-result, :descriptor descriptor))
             (catch Throwable ex
               (ex/exit-when-fatal ex)
@@ -80,14 +83,14 @@
               (throw ex))))))
     (catch Throwable ex
       (ex/exit-when-fatal ex)
-      (println "Exception while starting module" name ":" ex)
+      (error-all command-logger "Exception while starting module" name ":" ex)
       (.printStackTrace ex))))
 
 
 (defn stop-box
-  [name box log-fn]
+  [name box command-logger]
   (let [module-config (-> box :project :containium)]
-    (log-fn "Stopping module" name "...")
+    (info-all command-logger "Stopping module" name "...")
     (try
       (let [stop-fn (boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
@@ -95,10 +98,10 @@
         (boxure/call-in-box box (stop-fn (:start-result box)))
         :stopped)
       (catch Throwable ex
-        (log-fn "Exception while stopping module" name ":" ex)
+        (error-all command-logger "Exception while stopping module" name ":" ex)
         (ex/exit-when-fatal ex)
         (.printStackTrace ex))
       (finally
         (boxure.BoxureClassLoader/cleanThreadLocals)
         (boxure/clean-and-stop box)
-        (log-fn "Module" name "stopped.")))))
+        (info-all command-logger "Module" name "stopped.")))))

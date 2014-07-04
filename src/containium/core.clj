@@ -63,7 +63,7 @@
   When this function returns (of which its value is of no value, pun
   intended), the `shutdown` command has been issued."
   [systems]
-  (let [jline (ConsoleReader.)]
+  (let [jline (ConsoleReader. System/in @#'containium.systems.logging/stdout)]
     (loop []
       (let [[command & args] (commands/parse-quoted (.readLine jline "containium> "))]
         (case command

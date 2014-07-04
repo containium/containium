@@ -8,14 +8,16 @@
   (:require [containium.exceptions :as ex]
             [containium.systems :refer (Startable)]
             [containium.systems.ring-analytics :refer (wrap-ring-analytics)]
+            [containium.systems.logging :as logging :refer (refer-command-logging)]
             [boxure.core :as boxure]
             [packthread.core :refer (+>)]))
+(refer-command-logging)
 
 
 ;;; Public interface
 
 (defprotocol Ring
-  (upstart-box [this name box log-fn]
+  (upstart-box [this name box command-logger]
     "Add a box holding a ring application. The box's project definition
   needs to have a :ring configuration inside the :containium
   configuration. A required key is :handler, which, when evaluated
@@ -25,7 +27,7 @@
   The second is a regular expression, which is matched against the
   server name of the request, for example \".*containium.com\".")
 
-  (remove-box [this box log-fn]
+  (remove-box [this box command-logger]
     "Removes a box's ring handler from the ring server."))
 
 
@@ -38,17 +40,17 @@
   "Sort the RingApps for routing. It uses the :sort-value of the apps,
   in descending order. The :sort-value is assigned in `box->ring-app`
   function."
-  [apps log-fn]
+  [apps command-logger]
   (let [non-deterministic (remove #(or (-> % :ring-conf :context-path)
                                        (-> % :ring-conf :host-regex))
                                   apps)]
     (when (< 1 (count non-deterministic))
-      (log-fn (str "Warning: multiple web apps registered not "
-                    "having a context-path nor a host-regex ("
-                    (apply str (interpose ", " (map :name non-deterministic)))
-                    ")."))))
+      (warn-all command-logger (str "Warning: multiple web apps registered not "
+                                    "having a context-path nor a host-regex ("
+                                    (apply str (interpose ", " (map :name non-deterministic)))
+                                    ")."))))
   (let [sorted (->> apps (sort-by #(get % :sort-value)) reverse)]
-    (log-fn (apply str "Sorted apps: " (interpose ", " (map :name apps))))
+    (debug-command command-logger (apply str "Sorted apps: " (interpose ", " (map :name apps))))
     sorted))
 
 
@@ -100,9 +102,9 @@
 (defn make-app
   "Recreates the toplevel ring handler function, which routes the
   registered RingApps."
-  [log-fn ring-analytics apps]
+  [command-logger ring-analytics apps]
   (let [handler (if-let [apps (seq (vals apps))]
-                  (let [sorted (vec (sort-apps apps log-fn))
+                  (let [sorted (vec (sort-apps apps command-logger))
                         handlers (seq (map (fn [{:keys [ring-conf handler-fn box] :as app}]
                                              (+> handler-fn
                                                  (wrap-call-in-box box)
@@ -135,11 +137,10 @@
 
 
 (defn box->ring-app
-  [name {:keys [project] :as box} log-fn]
+  [name {:keys [project] :as box} command-logger]
   (let [ring-conf (clean-ring-conf (-> project :containium :ring))
         _ (assert (:handler ring-conf)
-                  (log-fn ":ring app config requires a :handler, but ring-conf only contains: "
-                          ring-conf))
+                  (str ":ring app config requires a :handler, but ring-conf is: " ring-conf))
         handler-fn (boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))
         ;; Sorting value is the number of slashes in the context path and the time it is
@@ -155,12 +156,12 @@
 
 (defrecord DistributedRing [rings]
   Ring
-  (upstart-box [_ name box log-fn]
+  (upstart-box [_ name box command-logger]
     (doseq [ring rings]
-      (upstart-box ring name box log-fn)))
-  (remove-box [_ name log-fn]
+      (upstart-box ring name box command-logger)))
+  (remove-box [_ name command-logger]
     (doseq [ring rings]
-      (remove-box ring name log-fn))))
+      (remove-box ring name command-logger))))
 
 
 (def distributed

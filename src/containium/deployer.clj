@@ -6,6 +6,8 @@
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :as config :refer (Config)]
             [containium.modules :as modules :refer (Manager)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
             [containium.deployer.watcher :as watcher]
             [clojure.java.io :refer (file as-file)]
             [clojure.core.async :as async :refer (<!)]
@@ -13,6 +15,8 @@
   (:import [containium.systems Startable Stoppable]
            [java.nio.file Path WatchService]
            [java.io File]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; Public API for Deployer systems.
@@ -30,7 +34,7 @@
 
 
 (defn- fs-event-handler
-  [manager dir kind ^Path path]
+  [manager logger dir kind ^Path path]
   (let [filename (.. path getFileName toString)]
     (cond
      ;; Creation or touch of .activate file.
@@ -40,24 +44,20 @@
                file (file dir name)]
            (if (.exists file)
              (try
-               (println "Activating" name "by filesystem event.")
-               (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
-                 (->> (modules/activate! manager name descriptor)
-                      (async/remove< (constantly true))
-                      ;;---TODO Improve above sink. Command-only messages now get lost. Problem is,
-                      ;;        many messages are also send to the console channel...
-                      ))
+               (info logger "Activating" name "by filesystem event.")
+               (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
+                     command-logger (logging/stdout-command-logger logger "activate")]
+                 (modules/activate! manager name descriptor command-logger))
                (catch Exception ex
-                 (println "Could not activate" name "-" ex)))
-             (println "Could not find" (str file) "in deployments directory."))))
+                 (error logger "Could not activate" name "-" ex)))
+             (error logger "Could not find" (str file) "in deployments directory."))))
      ;; Deletion of descriptor file
      (and (= :delete kind) (re-matches descriptor-files-re filename))
      (try
-       (println "Deactivating" filename "by filesystem event.")
-       (->> (modules/deactivate! manager filename)
-            (async/remove< (constantly true)))
+       (info logger "Deactivating" filename "by filesystem event.")
+       (modules/deactivate! manager filename (logging/stdout-command-logger logger "deactivate"))
        (catch Exception ex
-         (println "Could not deactivate" filename "-" ex))))))
+         (error logger "Could not deactivate" filename "-" ex))))))
 
 
 (defn- module-event-loop
@@ -90,40 +90,41 @@
      chan))
 
 
-(defrecord DirectoryDeployer [manager ^File dir watcher module-event-tap]
+(defrecord DirectoryDeployer [manager logger ^File dir watcher module-event-tap]
   Deployer
   (bootstrap-modules [_]
     (doseq [^File file (.listFiles dir)
             :let [name (.getName file)]
             :when (re-matches descriptor-files-re name)]
       (try
-        (println "Filesystem deployer now bootstrapping module" (str file))
-        (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))]
-          (->> (modules/activate! manager name descriptor)
-               (async/remove< (constantly true))))
+        (info logger "Filesystem deployer now bootstrapping module" (str file))
+        (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
+              command-logger (logging/stdout-command-logger logger "bootstrap")]
+          (modules/activate! manager name descriptor command-logger))
         (catch Exception ex
-          (println "Could not activate" name "-" ex)))))
+          (error logger "Could not activate" name "-" ex)))))
 
   Stoppable
   (stop [_]
-    (println "Stopping filesystem deployment watcher...")
+    (info logger "Stopping filesystem deployment watcher...")
     (async/close! module-event-tap)
     (watcher/close watcher)
-    (println "Filesystem deployment watcher stopped.")))
+    (info logger "Filesystem deployment watcher stopped.")))
 
 
 (def directory
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :fs)
-            manager (require-system Manager systems)]
-        (println "Starting filesystem deployer, using config" config "...")
+            manager (require-system Manager systems)
+            logger (require-system SystemLogger systems)]
+        (info logger "Starting filesystem deployer, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
         (let [dir (file (:deployments config))]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
-          (let [watcher (-> (watcher/mk-watchservice (partial fs-event-handler manager dir))
+          (let [watcher (-> (watcher/mk-watchservice (partial fs-event-handler manager logger dir))
                             (watcher/watch dir))
                 module-event-tap (async/tap (modules/event-mult manager) (module-event-loop dir))]
-            (println "Filesystem deployment watcher started.")
-            (DirectoryDeployer. manager dir watcher module-event-tap)))))))
+            (info logger "Filesystem deployment watcher started.")
+            (DirectoryDeployer. manager logger dir watcher module-event-tap)))))))

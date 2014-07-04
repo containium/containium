@@ -100,7 +100,7 @@
       "list" (let [installed (modules/list-installed (:modules systems))]
                (logging/with-log-level :info
                  (info-command command-logger (with-out-str (print-table installed))))
-               (done command-logger))
+               (logging/done command-logger))
 
       "activate" (if name
                    (let [descriptor (when path (modules/module-descriptor (as-file path)))]
