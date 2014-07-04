@@ -69,7 +69,7 @@
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
                   :configuration ([:sourceDirectories [:sourceDirectory "src"]]
-                                  [:temporaryOutputDirectory "false"]
+                                  [:temporaryOutputDirectory "true"]
                                   [:copyDeclaredNamespaceOnly "false"]
                                   [:compileDeclaredNamespaceOnly "false"]
                                   [:namespaces
