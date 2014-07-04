@@ -34,7 +34,8 @@
                  [com.maitria/packthread "0.1.1"]
                  [com.draines/postal "1.11.1"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
-             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
+             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
+             :aot {:aot [containium.core]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
