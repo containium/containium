@@ -17,16 +17,26 @@
 
   Furthermore, systems can create CommandLogger instances, which are
   used by (other) systems for logging messages to only the caller of
-  the command.
+  the command. For CommandLoggers are macros such as `info-all` and
+  `error-command` available.
+
+  Note that when supplying a Throwable as the message (or as the first
+  value to the mentioned macros), it will be logged as a stacktrace.
+  The Throwable may also be registered in another way, such as a
+  monitoring application, whenever a session also implements the
+  ExceptionWriter protocol.
 
   Finally, the SystemLogger interface allows for setting the log-level
   per module. This overrides the global log-level, although the timbre
-  compile-time level (if set) still takes precedence."
+  compile-time level (if set) still takes precedence. Throwables are
+  always logged at the :error level."
   (:require [containium.systems :refer (Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
             [taoensso.timbre :as timbre]
             [clojure.string :refer (upper-case)]
-            [clojure.java.io :refer (writer)])
+            [clojure.java.io :refer (writer)]
+            [clojure.stacktrace :refer (print-cause-trace)]
+            [clansi.core :refer (style)])
   (:import [java.io PrintStream OutputStream]))
 
 
@@ -41,10 +51,13 @@
 
 
 (defprotocol AppLogger
-  (log-console [this level msg] [this level ns msg]
-    "Log the given message on the given level. Optionally one can supply
-    the namespace the log statment is executed in. This is done
-    automatically by the level macros, such as `info` and `warn`."))
+  (log-console [this level msg-or-throwable] [this level ns msg-or-throwable]
+    "Log the given message on the given level. When supplying a
+    Throwable as the message, it will be logged as a stacktrace. The
+    Throwable may also be registered in another way, such as a
+    monitoring application. Optionally one can supply the namespace
+    the log statment is executed in. This is done automatically by the
+    level macros, such as `info` and `warn`."))
 
 
 (defmacro log*
@@ -53,12 +66,18 @@
   call this directly."
   [app-logger level & vals]
   (let [ns (str *ns*)]
-    `(log-console ~app-logger ~level ~ns (apply str (interpose " " [~@vals])))))
+    `(let [vals# [~@vals]]
+       (if (instance? Throwable (first vals#))
+         (timbre/with-log-level :error (log-console ~app-logger ~level ~ns (first vals#)))
+         (log-console ~app-logger ~level ~ns (apply str (interpose " " vals#)))))))
 
 
 (doseq [level timbre/levels-ordered]
   (eval `(defmacro ~(symbol (name level))
-           ~(str "Log the given values on the " (name level) " level.")
+           ~(str "Log the given values on the " (name level) " level." \newline
+                 "  If the first value is a Throwable, then only the stacktrace" \newline
+                 "  of that value is written. That Throwable may also be registered" \newline
+                 "  in another way, such as a monitoring application.")
            [app-logger# & vals#]
            `(log* ~app-logger# ~~level ~@vals#))))
 
@@ -74,16 +93,44 @@
      :refer (trace debug info warn error fatal report)]))
 
 
+(defn overtake-logging
+  "This is useful for apps which already use another logging
+  framework. This function tries to let those logging frameworks use
+  the supplied AppLogger instance.
+
+  Currently it tries to override:
+    - timbre, by setting the config."
+  [app-logger]
+  (try (require 'taoensso.timbre)
+       ;; Make sure all logging statements arrive in the AppLogger, which will check whether it
+       ;; should be logged itself.
+       (taoensso.timbre/set-config! :current-level :trace)
+       (taoensso.timbre/set-config!
+        :appenders
+        {:overtaken
+         {:enabled? true
+          :async? false
+          :fn (fn [{:keys [args level throwable ns]}]
+                (log-console app-logger level ns (or throwable
+                                                     (apply str (interpose " " args)))))}})
+       (info app-logger "Timbre logging is configured to use the supplied containiums's AppLogger.")
+       (catch Exception ex
+         (debug app-logger "Could not configure Timbre logging to use AppLogger:" ex))))
+
+
 ;;; Systems API for systems
 
 (defprotocol SystemLogger
   (add-session [this log-writer]
-    "Add a LogWriter to the console sessions. Make sure the underlying
-    stream IO is buffered, so it does not hinder the logging. The
-    following classes are already extending LogWriter: PrintStream.")
+    "Add a LogWriter and/or ExceptionWriter to the console sessions.
+    Make sure the underlying IO is buffered or executed on another
+    thread, so it does not hinder the logging.
+
+    The following classes are already extending LogWriter by default:
+     - PrintStream")
 
   (remove-session [this log-writer]
-    "Removes a LogWriter from the console sessions.")
+    "Removes a LogWriter/ExceptionWriter from the console sessions.")
 
   (command-logger [this log-writer command] [this log-writer command done-fn]
     "Creates a CommandLogger instance, which can be used for logging
@@ -91,7 +138,9 @@
     LogWriter), or both the console and command invoker. The command
     parameter is just a string, which is used for the formatting of
     the log statement. Optionally one can supply a function that is
-    called whenever the command is done.")
+    called whenever the command is done. The most convenient way of
+    using the CommandLogger is to use the log macros like `info-all`
+    and `error-command`.")
 
   (set-level [this app-name level]
     "Overrides the currently set log-level of timbre for a logger
@@ -100,10 +149,10 @@
 
 
 (defprotocol CommandLogger
-  (log-command [this level msg] [this level ns msg]
+  (log-command [this level msg] [this level ns msg-or-throwable]
     "Log a message to the caller of the command.")
 
-  (log-all [this level msg] [this level ns msg]
+  (log-all [this level msg] [this level ns msg-or-throwable]
     "Log a message to both the caller of the command and the console
     sessions.")
 
@@ -112,10 +161,15 @@
     trigger the callback set by the creator of the CommandLogger."))
 
 
-;;---TODO Add `write-exception` to this? In order to handle exceptions in a
-;;        special way, such as squash.io?
 (defprotocol LogWriter
-  (write-line [this line]))
+  (write-line [this line]
+    "Write the String to the output."))
+
+(defprotocol ExceptionWriter
+  (write-exception [this throwable prefix ns]
+    "Write the Throwable to the output, which was logged in the given
+    prefix (application name or command name) and the given ns. Both
+    may be nil."))
 
 
 (defmacro command-log*
@@ -125,13 +179,19 @@
   [app-logger level fn & vals]
   (let [ns (str *ns*)
         fn (symbol "containium.systems.logging" (str "log-" fn))]
-    `(~fn ~app-logger ~level ~ns (apply str (interpose " " [~@vals])))))
+    `(let [vals# [~@vals]]
+       (if (instance? Throwable (first vals#))
+         (timbre/with-log-level :error (~fn ~app-logger ~level ~ns (first vals#)))
+         (~fn ~app-logger ~level ~ns (apply str (interpose " " vals#)))))))
 
 
 (doseq [level timbre/levels-ordered
         fn ["all" "command"]]
   (eval `(defmacro ~(symbol (str (name level) "-" fn))
-           ~(str "Log the given values on the " (name level) " level to " fn)
+           ~(str "Log the given values on the " (name level) " level to " fn "." \newline
+                 "  If the first value is a Throwable, then only the stacktrace" \newline
+                 "  of that value is written. That Throwable may also be registered" \newline
+                 "  in another way, such as a monitoring application.")
            [app-logger# & vals#]
            `(command-log* ~app-logger# ~~level ~~fn ~@vals#))))
 
@@ -158,34 +218,58 @@
     (.println this line)))
 
 
+(def colors [:white :red :green :blue :yellow :magenta :cyan])
+(def levels {:trace [:white]
+             :debug [:blue]
+             :info [:cyan]
+             :warn [:yellow]
+             :error [:red :underline]
+             :fatal [:magenta :inverse]})
+
+
+;;--- TODO Make ansi optional?
 (defn mk-appender
-  [sessions-atom prefix log-writer]
+  [sessions-atom ^String prefix log-writer]
   {:timestamp-pattern "yyyy-MM-dd HH:mm:ss,SSS"
    :appenders
    {:containium
     {:enabled? true
      :async? false
-     :fn (fn [{:keys [args timestamp level]}]
-           (let [message (first args)
-                 level (format "%5S" (name level))
+     :fn (fn [{:keys [args timestamp level throwable]}]
+           (let [message (or throwable (first args))
+                 level (apply style (format "%5S" (name level)) (get levels level))
                  raw? (and (map? message) (::raw message))
-                 ns (or (and (map? message) (::ns message)) nil)
+                 ^String ns (or (and (map? message) (::ns message)) nil)
                  message (or (and (map? message) (::msg message)) message)
+                 throwable? (instance? Throwable message)
                  text (if-not raw?
                         (as-> message t
+                              (if throwable? (with-out-str (print-cause-trace t)) t)
                               (if (or ns prefix) (str "] " t) t)
-                              (str ns t)
+                              (if ns
+                                (str (style ns (nth colors (mod (.hashCode ns)
+                                                                (count colors)))) t)
+                                t)
                               (if (and ns prefix) (str "@" t) t)
-                              (str prefix t)
+                              (if prefix
+                                (str (style prefix (nth colors (mod (.hashCode prefix)
+                                                                    (count colors)))) t)
+                                t)
                               (if (or ns prefix) (str "[" t) t)
                               (str timestamp " " level " " t))
                         (str message))]
              (when log-writer
-               (write-line log-writer text))
+               (when (satisfies? LogWriter log-writer)
+                 (write-line log-writer text))
+               (when (and throwable? (satisfies? ExceptionWriter log-writer))
+                 (write-exception log-writer message prefix ns)))
              (when sessions-atom
                (doseq [session-log-writer @sessions-atom]
                  (when-not (= session-log-writer log-writer)
-                   (write-line session-log-writer text))))))}}})
+                   (when (satisfies? LogWriter session-log-writer)
+                     (write-line session-log-writer text))
+                   (when (and throwable? (satisfies? ExceptionWriter session-log-writer))
+                     (write-exception session-log-writer message prefix ns)))))))}}})
 
 
 ;; sessions = (atom #{LogWriter})

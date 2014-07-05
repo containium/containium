@@ -46,7 +46,7 @@
           (reset! show-ex false)
           (let [^Throwable cause (.getCause evt)]
             (error logger "Error in IO of Netty Socket deployer -" (.getMessage cause))
-            (debug logger (with-out-str (print-cause-trace cause)))))))))
+            (error logger cause)))))))
 
 
 ;;; Creation of Netty server and socket system.

@@ -34,7 +34,8 @@
                  [clojurewerkz/elastisch "2.0.0"]
                  [com.maitria/packthread "0.1.1"]
                  [com.draines/postal "1.11.1"]
-                 [com.taoensso/timbre "3.2.1"]]
+                 [com.taoensso/timbre "3.2.1"]
+                 [myguidingstar/clansi "1.3.0"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
