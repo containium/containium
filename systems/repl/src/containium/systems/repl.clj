@@ -53,12 +53,12 @@
           logger (require-system SystemLogger systems)]
       (info logger "Starting nREPL system...")
       (assert (integer? port))
-      (open-repl this (logging/stdout-command-logger logger "repl") port)
+      (open-repl this (logging/stdout-command-logger logger nil) port)
       (assoc this :logger logger)))
 
   Stoppable
   (stop [this]
-    (when @server (close-repl this (logging/stdout-command-logger logger "repl")))))
+    (when @server (close-repl this (logging/stdout-command-logger logger nil)))))
 
 
 (def nrepl (NREPL. (atom nil) nil))

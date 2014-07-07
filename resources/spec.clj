@@ -29,6 +29,7 @@
            :isolates [;"containium.*"
                       "containium\\.utils.*"
                       "taoensso\\.nippy.*"
+                      "taoensso\\.timbre.*"
                       "ring\\.(?!middleware).*"
                       "leiningen.*"
                       "robert.hooke"
