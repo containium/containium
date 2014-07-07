@@ -3,46 +3,31 @@
 <html>
 	<head>
 		<meta charset="UTF-8">
-		<title>ElasticSearch Head</title>
-		<link rel="stylesheet" href="lib/es/es.css">
-		<link rel="stylesheet" href="lib/jsacx/src/jsacx-widgets.css">
-		<script src="lib/jsacx/src/jquery.js"></script>
-		<script src="lib/jsacx/src/jsacx.js"></script>
-		<script src="lib/nohtml/jquery.acx-nohtml.js"></script>
-		<script src="lib/lang/en_strings.js"></script>
+		<title>elasticsearch-head</title>
+		<link rel="stylesheet" href="dist/base/reset.css">
+		<link rel="stylesheet" href="dist/vendor.css">
+		<link rel="stylesheet" href="dist/app.css">
+		<script src="dist/i18n.js" data-baseDir="dist/lang" data-langs="en,fr,pt"></script>
+		<script src="dist/vendor.js"></script>
+		<script src="dist/app.js"></script>
 		<script>
-			(function() {
-				var script0 = document.getElementsByTagName('script')[0];
-				var userLang = window.navigator.language || window.navigator.userLanguage;
-				userLang && ['fr'].forEach( function( lang ) {
-					if( userLang.indexOf( lang ) === 0 ) {
-						var s = document.createElement("script");
-						s.src = 'lib/lang/' + lang + '_strings.js';
-						script0.parentNode.insertBefore(s, script0);
-					}
-				});
-			}());
-		</script>
-		<script src="lib/jsacx/src/jsacx-widgets.js"></script>
-		<script src="lib/jsacx/src/jsacx-fields.js"></script>
-		<script src="lib/jsacx/src/jsacx-data.js"></script>
-		<script src="lib/es/core.js"></script>
-		<script src="lib/es/widgets.js"></script>
-		<script src="lib/graphael/g.raphael.standalone.js"></script>
-		<script src="lib/dateRangeParser/date-range-parser.js"></script>
-		<script>
-			$(function() {
+			window.onload = function() {
 				if(location.href.contains("/_plugin/")) {
-					var base_uri = location.protocol + "//" + location.host + "/";
+					var base_uri = location.href.replace(/_plugin\/.*/, '');
 				}
 				var args = location.search.substring(1).split("&").reduce(function(r, p) {
 					r[decodeURIComponent(p.split("=")[0])] = decodeURIComponent(p.split("=")[1]); return r;
 				}, {});
-				new es.ElasticSearchHead("body", { id: "es", base_uri: args["base_uri"] || base_uri });
-			});
+				new app.App("body", {
+					id: "es",
+					base_uri: args["base_uri"] || base_uri,
+					auth_user : args["auth_user"] || "",
+					auth_password : args["auth_password"],
+					dashboard: args["dashboard"]
+				});
+			};
 		</script>
-		<link rel="icon" href="lib/es/images/favicon.png" type="image/png">
+		<link rel="icon" href="dist/base/favicon.png" type="image/png">
 	</head>
 	<body></body>
 </html>
- 

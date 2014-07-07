@@ -11,7 +11,7 @@
                  [boxure "0.1.0-SNAPSHOT"]
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
-                 [ring/ring-core "1.2.0" :exclusions [[javax.servlet/servlet-api]]]
+                 [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
                  [io.netty/netty "3.9.0.Final"]
@@ -37,15 +37,17 @@
                  [com.taoensso/timbre "3.2.1"]
                  [myguidingstar/clansi "1.3.0"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
-             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}}
+             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
+             :aot {:aot [containium.core]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
-  :main containium.core
-  :aot [containium.core]
+  :main containium.starter
+  :aot [containium.starter]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
              "-XX:MaxPermSize=512m"
+             "-Djava.net.preferIPv4Stack=true"
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
@@ -70,7 +72,7 @@
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
                   :configuration ([:sourceDirectories [:sourceDirectory "src"]]
-                                  [:temporaryOutputDirectory "false"]
+                                  [:temporaryOutputDirectory "true"]
                                   [:copyDeclaredNamespaceOnly "false"]
                                   [:compileDeclaredNamespaceOnly "false"]
                                   [:namespaces
