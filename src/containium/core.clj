@@ -18,7 +18,7 @@
             [containium.systems.repl :as repl]
             [containium.systems.ring-analytics :as ring-analytics]
             [containium.systems.mail :as mail]
-            [containium.systems.logging :as logging]
+            [containium.systems.logging :as logging :refer (refer-logging)]
             [containium.exceptions :as ex]
             [containium.commands :as commands]
             [clojure.java.io :refer (resource as-file)]
@@ -26,6 +26,7 @@
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask])
   (:gen-class))
+(refer-logging)
 
 
 ;;; Globals for REPL access. A necessary evil.
@@ -62,7 +63,7 @@
   See the documentation on the handle-command for more info on this.
   When this function returns (of which its value is of no value, pun
   intended), the `shutdown` command has been issued."
-  [systems]
+  [{:keys [logging] :as systems}]
   (let [jline (ConsoleReader. System/in @#'containium.systems.logging/stdout)]
     (loop []
       (let [[command & args] (commands/parse-quoted (.readLine jline "containium> "))]
@@ -74,8 +75,8 @@
                                          (logging/stdout-command-logger (:logging systems) command))
                 (catch Throwable t
                   (ex/exit-when-fatal t)
-                  (println "Error handling command" command ":")
-                  (.printStackTrace t)))
+                  (error logging "Error handling command" command ":")
+                  (error logging t)))
               (recur)))))))
 
 
