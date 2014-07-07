@@ -6,53 +6,59 @@
   "The system for starting and stopping REPLs."
   (:require [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :refer (Config get-config)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
             [clojure.tools.nrepl.server :as nrepl]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; The public system API.
 
 (defprotocol REPL
-  (open-repl [this ] [this port]
-    "Starts the REPL. If no port number is supplied, a unbound port is
+  (open-repl [this command-logger] [this command-logger port]
+    "Starts the REPL. If no port number is supplied, an unbound port is
   chosen at random.")
 
-  (close-repl [this]
+  (close-repl [this comamnd-logger]
     "Stops the currently running REPL."))
 
 
 ;;; The nREPL implementation.
 
-(defrecord NREPL [server]
+(defrecord NREPL [server logger]
   REPL
-  (open-repl [_]
+  (open-repl [_ command-logger]
     (if @server
-      (println "An nREPL server is already running, on port" (:port @server))
+      (error-command command-logger "An nREPL server is already running, on port" (:port @server))
       (do (reset! server (nrepl/start-server))
-          (println "nREPL server started on port" (:port @server)))))
+          (info-all command-logger "nREPL server started on port" (:port @server)))))
 
-  (open-repl [_ port]
+  (open-repl [_ command-logger port]
     (if @server
-      (println "An nREPL server is already running, on port" (:port @server))
+      (error-command command-logger "An nREPL server is already running, on port" (:port @server))
       (do (reset! server (nrepl/start-server :port port))
-          (println "nREPL server started on port" port))))
+          (info-all command-logger "nREPL server started on port" port))))
 
-  (close-repl [_]
+  (close-repl [_ command-logger]
     (if @server
       (do (nrepl/stop-server @server)
           (reset! server nil)
-          (println "nREPL server stopped."))
-      (println "Could not close nREPL, no nREPL server currently running.")))
+          (info-all command-logger "nREPL server stopped."))
+      (error-command command-logger "Could not close nREPL, no nREPL server currently running.")))
 
   Startable
   (start [this systems]
-    (let [{:keys [port]} (get-config (require-system Config systems) :repl)]
+    (let [{:keys [port]} (get-config (require-system Config systems) :repl)
+          logger (require-system SystemLogger systems)]
+      (info logger "Starting nREPL system...")
       (assert (integer? port))
-      (open-repl this port)
-      this))
+      (open-repl this (logging/stdout-command-logger logger "repl") port)
+      (assoc this :logger logger)))
 
   Stoppable
   (stop [this]
-    (when @server (close-repl this))))
+    (when @server (close-repl this (logging/stdout-command-logger logger "repl")))))
 
 
-(def nrepl (NREPL. (atom nil)))
+(def nrepl (NREPL. (atom nil) nil))

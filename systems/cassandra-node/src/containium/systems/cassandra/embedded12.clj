@@ -6,7 +6,8 @@
   "The embedded Cassandra 1.2 implementation."
   (:require [containium.systems :refer (Startable Stoppable require-system)]
             [containium.systems.cassandra :refer (Cassandra cql-statements)]
-            [containium.systems.config :refer (Config get-config)])
+            [containium.systems.config :refer (Config get-config)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
             UntypedResultSet]
            [org.apache.cassandra.db ConsistencyLevel]
@@ -20,6 +21,7 @@
            [java.nio CharBuffer ByteBuffer]
            [java.nio.charset Charset]
            [java.math BigInteger BigDecimal]))
+(refer-logging)
 
 
 ;;; Helper functions.
@@ -180,7 +182,8 @@
     (do-prepared* record ps {:consistency :one, :raw? true} nil)))
 
 
-(defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state]
+(defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state
+                                logger]
   Cassandra
   (prepare [this query]
     (prepare* this query))
@@ -202,7 +205,7 @@
 
   (keyspaced [this name]
     (let [keyspaced-state (doto (ClientState. true) (.setKeyspace name))]
-      (EmbeddedCassandra12. nil nil keyspaced-state (QueryState. keyspaced-state))))
+      (EmbeddedCassandra12. nil nil keyspaced-state (QueryState. keyspaced-state) logger)))
 
   (write-schema [this schema-str]
     (write-schema* this schema-str))
@@ -210,20 +213,21 @@
   Stoppable
   (stop [this]
     (if (and daemon thread)
-      (do (println "Stopping embedded Cassandra instance...")
+      (do (info logger "Stopping embedded Cassandra instance...")
           (.deactivate daemon)
           (.interrupt thread)
-          (println "Waiting for Cassandra to be stopped...")
+          (info logger "Waiting for Cassandra to be stopped...")
           (while (some-> daemon .nativeServer .isRunning) (Thread/sleep 200))
-          (println "Embedded Cassandra instance stopped."))
-      (println "Cannot call stop on a keyspaced instance."))))
+          (info logger "Embedded Cassandra instance stopped."))
+      (warn logger "Cannot call stop on a keyspaced instance."))))
 
 
 (def embedded12
   (reify Startable
     (start [_ systems]
-      (let [config (get-config (require-system Config systems) :cassandra)]
-        (println "Starting embedded Cassandra, using config" config "...")
+      (let [config (get-config (require-system Config systems) :cassandra)
+            logger (require-system SystemLogger systems)]
+        (info logger "Starting embedded Cassandra, using config" config "...")
         (System/setProperty "cassandra.config" (:config-file config))
         (System/setProperty "cassandra-foreground" "false")
         (let [daemon (CassandraDaemon.)
@@ -232,7 +236,7 @@
               query-state (QueryState. client-state)]
           (.setDaemon thread true)
           (.start thread)
-          (println "Waiting for Cassandra to be fully started...")
+          (info logger "Waiting for Cassandra to be fully started...")
           (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
-          (println "Cassandra fully started.")
-          (EmbeddedCassandra12. daemon thread client-state query-state))))))
+          (info logger "Cassandra fully started.")
+          (EmbeddedCassandra12. daemon thread client-state query-state logger))))))

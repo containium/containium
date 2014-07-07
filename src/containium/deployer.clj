@@ -123,7 +123,8 @@
         (let [dir (file (:deployments config))]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
-          (let [watcher (-> (watcher/mk-watchservice (partial fs-event-handler manager logger dir))
+          (let [watcher (-> (partial fs-event-handler manager logger dir)
+                            (watcher/mk-watchservice logger)
                             (watcher/watch dir))
                 module-event-tap (async/tap (modules/event-mult manager) (module-event-loop dir))]
             (info logger "Filesystem deployment watcher started.")

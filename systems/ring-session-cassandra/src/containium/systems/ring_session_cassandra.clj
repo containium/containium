@@ -11,10 +11,12 @@
                                                            has-keyspace? write-schema
                                                            bytebuffer->bytes
                                                            bytes->bytebuffer)]
+            [containium.systems.logging :as logging :refer (refer-logging)]
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.java.io :refer (resource)])
   (:import [java.util UUID]))
+(refer-logging)
 
 
 ;;; SessionStore implementation based on a Cassandra system.
@@ -75,9 +77,9 @@
 
 
 (defn- ensure-schema
-  [cassandra]
+  [cassandra logger]
   (when-not (has-keyspace? cassandra "ring")
-    (println "No `ring` keyspace detected; writing schema.")
+    (info logger "No `ring` keyspace detected; writing schema.")
     (write-schema cassandra (slurp (resource "cassandra-session-store.cql")))))
 
 
@@ -85,12 +87,14 @@
   (reify Startable
     (start [_ systems]
       (let [cassandra (:cassandra systems)
+            logger (:logging systems)
             _ (assert cassandra (str "Cassandra Ring session store requires a "
                                      "Cassandra system, under the :cassandra key."))
+            _ (assert logger (str "Cassandra Ring session store requires a "
+                                  "SystemLogger system, under the :logging key."))
             config (get-config (require-system Config systems) :session-store)
-            _ (println "Starting Cassandra Ring session store, using config"
-                       config "...")
-            _ (ensure-schema cassandra)
+            _ (info logger "Starting Cassandra Ring session store, using config" config "...")
+            _ (ensure-schema cassandra logger)
             ttl-mins (:ttl-mins config)
             ttl-days (:ttl-days config)
             _ (assert ttl-mins "Missing :ttl-mins config")
@@ -104,5 +108,5 @@
                                   (str "UPDATE ring.sessions USING TTL " (* 60 60 24 ttl-days)
                                        " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
-        (println "Cassandra Ring session store started.")
+        (info logger "Cassandra Ring session store started.")
         (CassandraStore. ttl-mins cassandra read-q write-q write-q-long remove-q)))))

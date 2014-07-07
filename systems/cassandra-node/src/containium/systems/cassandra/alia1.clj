@@ -7,7 +7,9 @@
   (:require [qbits.alia :as alia]
             [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :as config :refer (Config)]
-            [containium.systems.cassandra :refer (Cassandra cql-statements)]))
+            [containium.systems.cassandra :refer (Cassandra cql-statements)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]))
+(refer-logging)
 
 
 (def ^:dynamic *consistency* nil)
@@ -40,7 +42,7 @@
     (do-prepared* record ps {:consistency :one} nil)))
 
 
-(defrecord Alia1 [cluster session]
+(defrecord Alia1 [cluster session logger]
   Cassandra
   (prepare [this query-str]
     (prepare* this query-str))
@@ -68,9 +70,9 @@
 
   Stoppable
   (stop [this]
-    (println "Stopping Alia 1 system...")
+    (info logger "Stopping Alia 1 system...")
     (alia/shutdown cluster)
-    (println "Alia 1 system stopped.")))
+    (info logger "Alia 1 system stopped.")))
 
 
 (defn alia1
@@ -80,10 +82,11 @@
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) config-key)
-            _ (println "Starting Alia 1 system, using config:" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting Alia 1 system, using config:" config)
             cluster (apply alia/cluster
                            (:contact-points config)
                            (interleave (keys config) (vals config)))
             session (alia/connect cluster)]
-        (println "Alia 1 system started.")
-        (Alia1. cluster session)))))
+        (info logger "Alia 1 system started.")
+        (Alia1. cluster session logger)))))

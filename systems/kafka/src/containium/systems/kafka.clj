@@ -4,10 +4,12 @@
 
 (ns containium.systems.kafka
   (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (get-config Config)])
+            [containium.systems.config :refer (get-config Config)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import  [containium.systems Startable Stoppable]
             [kafka.server KafkaConfig KafkaServer]
             [java.util Properties]))
+(refer-logging)
 
 
 ;;; The public API of the Kafka system.
@@ -30,25 +32,26 @@
      properties))
 
 
-(defrecord EmbeddedKafka [^KafkaServer server]
+(defrecord EmbeddedKafka [^KafkaServer server logger]
   Kafka
   (get-server [_] server)
 
   Stoppable
   (stop [_]
-    (println "Stopping embedded Kafka...")
+    (info logger "Stopping embedded Kafka...")
     (.shutdown server)
-    (println "Waiting for embedded Kafka to be fully stopped.")
+    (info logger "Waiting for embedded Kafka to be fully stopped.")
     (.awaitShutdown server)
-    (println "Embedded Kafka fully stopped.")))
+    (info logger "Embedded Kafka fully stopped.")))
 
 
 (def embedded
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :kafka)
-            _ (println "Starting embedded Kafka using config:" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting embedded Kafka using config:" config)
             server-properties (map->properties (:server config))
             server (doto (KafkaServer. (KafkaConfig. server-properties) (kafka.utils.SystemTime$/MODULE$)) .startup)]
-        (println "Embedded Kafka started.")
-        (EmbeddedKafka. server)))))
+        (info logger "Embedded Kafka started.")
+        (EmbeddedKafka. server logger)))))

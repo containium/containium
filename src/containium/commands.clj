@@ -76,10 +76,10 @@
     (case action
       "start" (if port-str
                 (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
-                  (repl/open-repl (:repl systems) port)
+                  (repl/open-repl (:repl systems) command-logger port)
                   (error-command command-logger "Invalid port number:" port-str))
-                (repl/open-repl (:repl systems)))
-      "stop" (repl/close-repl (:repl systems))
+                (repl/open-repl (:repl systems) command-logger))
+      "stop" (repl/close-repl (:repl systems) command-logger)
       (error-command command-logger "Unknown action" action "- please use 'start' or 'stop'."))
     (logging/done command-logger)))
 

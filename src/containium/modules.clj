@@ -103,8 +103,8 @@
 
 (defn- agent-error-handler
   [logger agent ^Exception exception]
-  (error logger "Exception in module agent:")
-  (error logger (with-out-str (print-cause-trace exception))))
+  (error logger "Exception in module agent:" (.getMessage exception))
+  (error logger exception))
 
 
 (defn- new-agent
@@ -136,7 +136,7 @@
      (update-status module manager command-logger success-state nil))
   ([{:keys [name error] :as module} manager command-logger success-state error-state]
      (let [status (if error error-state success-state)]
-       (info-all command-logger "Module" name "status has changed to " (clojure.core/name status))
+       (info-all command-logger "Module" name "status has changed to" (clojure.core/name status))
        (fire-event manager :status name status)
        (assoc module :status status))))
 
@@ -170,7 +170,6 @@
             ;; else if box failed to start.
             (throw (Exception. (str "Box " name " failed to start.")))))
         (catch Throwable ex
-          (error (:logging systems) (with-out-str (print-cause-trace ex)))
           (error-all command-logger "Module" name "failed to deploy:" (.getMessage ex))
           (assoc module :error true :descriptor descriptor)))
       (do (error-command command-logger "Module" name
@@ -187,7 +186,7 @@
        (if (do (when (-> (or (:box old) box) :project :containium :ring)
                  (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name)
                              command-logger))
-               (stop-box name (or (:box old) box) command-logger))
+               (stop-box name (or (:box old) box) command-logger (:systems manager)))
          (do (info-all command-logger "Module" name "successfully undeployed.")
              (if old module (dissoc module :box)))
          (do (error-all command-logger "Module" name "failed to undeploy.")

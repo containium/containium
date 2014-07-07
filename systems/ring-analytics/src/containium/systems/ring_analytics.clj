@@ -6,6 +6,7 @@
   "Analytics is a system that can store ring requests."
   (:require [containium.systems :as systems :refer (Startable Stoppable)]
             [containium.systems.elasticsearch :as es-system :refer (Elastic)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]
             [containium.exceptions :as ex]
             [ring.middleware.params]
             [ring.middleware.cookies]
@@ -15,6 +16,7 @@
             [cheshire.core :as json]
             [packthread.core :refer (+>)]
             [clojure.string :refer (lower-case)]))
+(refer-logging)
 
 
 ;;; The public system API.
@@ -39,7 +41,7 @@
 
 
 (defn- wrap-ring-analytics*
-  [{:keys [client] :as record} app-name handler]
+  [{:keys [client logger] :as record} app-name handler]
   (-> (fn [request]
         (let [started (System/currentTimeMillis)
               response (try (handler request)
@@ -55,9 +57,9 @@
           (future (try (store-request client app-name processed)
                        (catch Throwable t
                          (ex/exit-when-fatal t)
-                         (println "Failed to store request for ring-analytics:")
-                         (println "Request (processed)" processed)
-                         (.printStackTrace t))))
+                         (error logger "Failed to store request for ring-analytics:")
+                         (error logger "Request (processed)" processed)
+                         (error logger t))))
           (if (instance? Throwable response) (throw response) response)))
       ring.middleware.cookies/wrap-cookies
       ring.middleware.params/wrap-params))
@@ -73,21 +75,22 @@
     :content-type :smile, :create? false))
 
 
-(defrecord ElasticAnalytics [client]
+(defrecord ElasticAnalytics [client logger]
   Analytics
   (wrap-ring-analytics [this app-name handler]
     (wrap-ring-analytics* this app-name handler))
   Stoppable
   (stop [this]
-    (println "Stopped Analytics based on ElasticSearch.")))
+    (info logger "Stopped Analytics based on ElasticSearch.")))
 
 
 (def elasticsearch
   (reify Startable
     (start [this systems]
-      (println "Starting Analytics based on ElasticSearch...")
-      (let [elastic (systems/require-system Elastic systems)]
+      (let [elastic (systems/require-system Elastic systems)
+            logger (systems/require-system SystemLogger systems)]
+        (info logger "Starting Analytics based on ElasticSearch...")
         (let [client (.client (es-system/node elastic))]
           (put-template client)
-          (println "Started Analytics based on ElasticSearch.")
-          (ElasticAnalytics. client))))))
+          (info logger "Started Analytics based on ElasticSearch.")
+          (ElasticAnalytics. client logger))))))

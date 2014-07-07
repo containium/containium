@@ -360,6 +360,7 @@
       (alter-var-root #'clojure.core/*err* (constantly (writer err))))))
 
 
+;;---TODO Read logging level(s) from config
 (def logger
   (reify Startable
     (start [this systems]

@@ -6,8 +6,10 @@
   (:require [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :as config :refer (Config)]
             [containium.deployer :refer :all]
-            [containium.systems.logging :as logging :refer (SystemLogger LogWriter refer-logging)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger LogWriter refer-logging refer-command-logging)]
             [containium.commands :as commands]
+            [containium.exceptions :as ex]
             [clojure.java.io :refer (as-file)]
             [clojure.stacktrace :refer (print-cause-trace)])
   (:import [org.jboss.netty.channel SimpleChannelHandler ChannelHandlerContext MessageEvent Channel
@@ -20,6 +22,7 @@
            [java.net InetSocketAddress]
            [containium.modules Response]))
 (refer-logging)
+(refer-command-logging)
 
 
 ;;; The message handler for Netty server.
@@ -38,9 +41,16 @@
           (when command
             ;; TODO Add argument to done-fn for success?
             ;; TODO Close via future? (.addListener ^ChannelFuture fut ChannelFutureListener/CLOSE)
-            (commands/handle-command command args systems
-                                     (logging/command-logger logger chan command
-                                                             (fn []  (.close chan)))))))
+            (let [command-logger (logging/command-logger logger chan command
+                                                         (fn []  (.close chan)))]
+              (try
+                (commands/handle-command command args systems command-logger)
+                (catch Throwable t
+                  (ex/exit-when-fatal t)
+                  (error-all command-logger "Error handling command" command ":")
+                  (error logger t)
+                  (logging/done command-logger)))))))
+
       (exceptionCaught [^ChannelHandlerContext ctx ^ExceptionEvent evt]
         (when @show-ex
           (reset! show-ex false)
