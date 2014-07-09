@@ -30,6 +30,7 @@
                       "containium\\.utils.*"
                       "taoensso\\.nippy.*"
                       "taoensso\\.timbre.*"
+                      "taoensso\\.encore.*"
                       "ring\\.(?!middleware).*"
                       "leiningen.*"
                       "robert.hooke"

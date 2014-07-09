@@ -130,6 +130,11 @@
         (logging/done command-logger)))))
 
 
+(defmethod handle-command "ma"
+  [_ args systems command-logger]
+  (handle-command "module" (cons "activate" args) systems command-logger))
+
+
 (defmethod handle-command "logging"
   [_ args systems command-logger]
   (let [[name level] args]
