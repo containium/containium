@@ -130,11 +130,6 @@
         (logging/done command-logger)))))
 
 
-(defmethod handle-command "ma"
-  [_ args systems command-logger]
-  (handle-command "module" (cons "activate" args) systems command-logger))
-
-
 (defmethod handle-command "logging"
   [_ args systems command-logger]
   (let [[name level] args]
@@ -145,3 +140,14 @@
             (info-all command-logger "Logging for" name "set to" level)))
       (error-command command-logger "Missing name, missing level, or invalid level.")))
   (logging/done command-logger))
+
+
+;;; Shortcuts
+
+(defmethod handle-command "ma"
+  [_ args systems command-logger]
+  (handle-command "module" (cons "activate" args) systems command-logger))
+
+(defmethod handle-command "ml"
+  [_ args systems command-logger]
+  (handle-command "module" (cons "list" args) systems command-logger))

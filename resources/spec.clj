@@ -12,7 +12,10 @@
          :max-channel-memory-size 1048576 ; 1 mb
          :max-total-memory-size 1048576} ; 1 mb
  :jetty9 {:port 8100
-          :join? false}
+          :join? false
+          :ssl-port 8443
+          :keystore "dev-resources/dev_keystore.jks"
+          :key-password "whoopwhoop"}
  :cassandra {:config-file "cassandra.yaml"}
  :alia {:contact-points ["localhost"]
         :port 9042}
@@ -39,6 +42,7 @@
                       "dynapath.*"
                       "simple_time.*"
                       "postal.*"
+                      "clj-http.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
@@ -62,7 +66,7 @@
                       "useful.*"
                       ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
                       ;; Keep this in mind when seeking leaks. :)
-                      ;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
+                      ;;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
                       ]}
  :repl {:port 13337}
  :fs {:deployments "deployments"}

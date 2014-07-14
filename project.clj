@@ -27,7 +27,7 @@
                  [org.clojars.touch/elasticsearch-lang-clojure "0.2.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
-                 [info.sunng/ring-jetty9-adapter "0.2.0"]
+                 [info.sunng/ring-jetty9-adapter "0.6.1"]
                  [cc.qbits/alia "1.9.2"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.1.1"]
