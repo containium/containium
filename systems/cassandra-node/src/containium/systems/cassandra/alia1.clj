@@ -63,7 +63,7 @@
     (has-keyspace* this name))
 
   (keyspaced [this name]
-    (Alia1. cluster (alia/connect cluster name)))
+    (Alia1. cluster (alia/connect cluster name) logger))
 
   (write-schema [this schema-str]
     (write-schema* this schema-str))
