@@ -104,4 +104,5 @@
                                   [:manifest [:addDefaultImplementationEntries "true"]]
                                   [:manifestEntries [:Containium-Version "${buildNumber}"]]]}]]
   :pom-addition [:properties [:project.build.sourceEncoding "UTF-8"]]
+  :aliases {"launch" ["with-profile" "+aot" "run"]}
 )
