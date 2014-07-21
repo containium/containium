@@ -215,7 +215,8 @@
 (extend-type java.io.PrintStream
   LogWriter
   (write-line [^PrintStream this line]
-    (.println this line)))
+    (.println this line)
+    (.flush this)))
 
 
 (def colors [:white :red :green :blue :yellow :magenta :cyan])

@@ -36,13 +36,17 @@
 (defrecord RingApp [name box handler-fn ring-conf sort-value])
 
 
+(def app-seq-no (atom 0))
+
+
 (defn- sort-apps
   "Sort the RingApps for routing. It uses the :sort-value of the apps,
   in descending order. The :sort-value is assigned in `box->ring-app`
   function."
   [apps command-logger]
   (let [non-deterministic (remove #(or (-> % :ring-conf :context-path)
-                                       (-> % :ring-conf :host-regex))
+                                       (-> % :ring-conf :host-regex)
+                                       (-> % :ring-conf :priority))
                                   apps)]
     (when (< 1 (count non-deterministic))
       (warn-all command-logger (str "Warning: multiple web apps registered not "
@@ -143,12 +147,19 @@
                   (str ":ring app config requires a :handler, but ring-conf is: " ring-conf))
         handler-fn (boxure/eval box `(do (require '~(symbol (namespace (:handler ring-conf))))
                                           ~(:handler ring-conf)))
-        ;; Sorting value is the number of slashes in the context path and the time it is
-        ;; deployed (actually, the time when this function is called). The more slashes and the
-        ;; earlier it's deployed, the higher the rank. Higher ranks are tried first for serving
-        ;; a request.
+        ;; Sorting value determines the rank. Higher ranks are tried first for serving a request.
+        ;; This sorting value is based on three values, in the order importancy:
+        ;;  - the :priority config within the :ring configuration of the app, which is a value
+        ;;    between -92233720368 and 92233720368;
+        ;;  - the number of slashes in the :context-path config within the :ring configuration
+        ;;    of the app;
+        ;;  - an automatically incremented sequence number of deployed apps, which means
+        ;;    later added apps with the same priority and the same number of slashes get a higher
+        ;;    rank.
         num-slashes (count (filter (partial = \/) (:context-path ring-conf)))
-        sort-value (long (+ (* num-slashes 1e15) (- 1e15 (System/currentTimeMillis))))]
+        sort-value (+ (* (or (:priority ring-conf) 0) 100 1000000)
+                      (* num-slashes 1000000)
+                      (swap! app-seq-no inc))]
     (RingApp. name box handler-fn ring-conf sort-value)))
 
 
