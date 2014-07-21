@@ -93,6 +93,9 @@
     (logging/done command-logger)))
 
 
+(def path-cache (atom {}))
+
+
 (defmethod handle-command "module"
   [_ args systems command-logger]
   (let [[action name path] args]
@@ -103,7 +106,9 @@
                (logging/done command-logger))
 
       "activate" (if name
-                   (let [descriptor (when path (modules/module-descriptor (as-file path)))]
+                   (let [path (or path (get @path-cache name))
+                         descriptor (when path (modules/module-descriptor (as-file path)))]
+                     (swap! path-cache assoc name path)
                      (modules/activate! (:modules systems) name descriptor command-logger))
                    (do (error-command command-logger "Missing name argument.")
                        (logging/done command-logger)))
