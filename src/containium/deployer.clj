@@ -73,14 +73,26 @@
                  (swap! descriptors assoc name (update-in descriptor [:file] str)))
 
                :deactivate
-               (.delete (file dir name))
+               (loop [postfix nil]
+                 (when (.exists (file dir name))
+                   (when-not (.renameTo (file dir name)
+                                        (file dir (str name
+                                                       (when postfix (str "-" postfix))
+                                                       ".deactivated")))
+                     (recur (inc (or postfix 0))))))
 
                :status
                (spit (file dir (str name ".status"))
                      (clojure.core/name (:data msg)))
 
                :kill
-               (.delete (file dir name))
+               (loop [postfix nil]
+                 (when (.exists (file dir name))
+                   (when-not (.renameTo (file dir name)
+                                        (file dir (str name
+                                                       (when postfix (str "-" postfix))
+                                                       ".deactivated")))
+                     (recur (inc (or postfix 0))))))
 
                :finished
                (let [response (:data msg)]
