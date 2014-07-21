@@ -156,7 +156,7 @@
     "Log a message to both the caller of the command and the console
     sessions.")
 
-  (done [this]
+  (done [this] [this success?]
     "Call this function to indicate the command is done. This will
     trigger the callback set by the creator of the CommandLogger."))
 
@@ -315,7 +315,9 @@
         (log-all [_ level ns msg]
           (timbre/log all-appender level {::ns ns ::msg msg}))
         (done [_]
-          (when done-fn (done-fn))))))
+          (when done-fn (done-fn true)))
+        (done [_ success?]
+          (when done-fn (done-fn success?))))))
   (command-logger [this log-writer command]
     (command-logger this log-writer command nil))
 

@@ -146,8 +146,10 @@
                               :ring ring/distributed
                               :modules modules/default-manager
                               :fs deployer/directory
-                              :socket socket/socket
-                              :repl repl/nrepl]
+                              :repl repl/nrepl
+                              ;; Socket needs to be the last system,
+                              ;;  otherwise it doesn’t have the :repl system available.
+                              :socket socket/socket]
          ((if daemon? run-daemon #_else run) systems))
        (catch Exception ex
          (.printStackTrace ex))

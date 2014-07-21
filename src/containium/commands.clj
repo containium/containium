@@ -36,7 +36,7 @@
   [command _ _ command-logger]
   (error-command command-logger "Unknown command:" command)
   (info-command command-logger "Type 'help' for info on the available commands.")
-  (logging/done command-logger))
+  (logging/done command-logger false))
 
 
 (defmethod handle-command "help"
@@ -71,17 +71,18 @@
 
 
 (defmethod handle-command "repl"
-  [_ args systems command-logger]
-  (let [[action port-str] args]
-    (case action
-      "start" (if port-str
-                (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
-                  (repl/open-repl (:repl systems) command-logger port)
-                  (error-command command-logger "Invalid port number:" port-str))
-                (repl/open-repl (:repl systems) command-logger))
-      "stop" (repl/close-repl (:repl systems) command-logger)
-      (error-command command-logger "Unknown action" action "- please use 'start' or 'stop'."))
-    (logging/done command-logger)))
+  [_ [action port-str] {:keys [repl]} command-logger]
+  (let [ok?
+        (case action
+          "start" (if port-str
+                    (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
+                      (do (repl/open-repl repl command-logger port) true)
+                      (do (error-command command-logger "Invalid port number:" port-str) false))
+                    (do (repl/open-repl repl command-logger) true))
+          "stop" (do (repl/close-repl repl command-logger) true)
+          (do (error-command command-logger "Unknown action" action "- please use 'start' or 'stop'.")
+              false))]
+  (logging/done command-logger ok?)))
 
 
 (defmethod handle-command "threads"
@@ -111,28 +112,28 @@
                      (swap! path-cache assoc name path)
                      (modules/activate! (:modules systems) name descriptor command-logger))
                    (do (error-command command-logger "Missing name argument.")
-                       (logging/done command-logger)))
+                       (logging/done command-logger false)))
 
       "deactivate" (if name
                      (modules/deactivate! (:modules systems) name command-logger)
                      (do (error-command command-logger "Missing name argument.")
-                         (logging/done command-logger)))
+                         (logging/done command-logger false)))
 
       "kill" (if name
                (modules/kill! (:modules systems) name command-logger)
                (do (error-command command-logger "Missing name argument.")
-                   (logging/done command-logger)))
+                   (logging/done command-logger false)))
 
       "versions" (if name
                    (modules/versions (:modules systems) name command-logger)
                    (do (error-command command-logger "Missing name argument")
-                       (logging/done command-logger)))
+                       (logging/done command-logger false)))
 
       (let [msg (if action
                   (str "Unknown action '" action "', see help.")
                   "Missing action argument, see help.")]
         (error-command command-logger msg)
-        (logging/done command-logger)))))
+        (logging/done command-logger false)))))
 
 
 (defmethod handle-command "logging"
@@ -142,9 +143,10 @@
       (do (logging/set-level (:logging systems) name (when-not (= "reset" level) (keyword level)))
           (if (= "reset" level)
             (info-all command-logger "Logging for" name "reset to default")
-            (info-all command-logger "Logging for" name "set to" level)))
-      (error-command command-logger "Missing name, missing level, or invalid level.")))
-  (logging/done command-logger))
+            (info-all command-logger "Logging for" name "set to" level))
+          (logging/done command-logger true))
+      (do (error-command command-logger "Missing name, missing level, or invalid level.")
+          (logging/done command-logger false)))))
 
 
 ;;; Shortcuts

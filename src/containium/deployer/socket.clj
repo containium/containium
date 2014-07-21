@@ -42,14 +42,16 @@
             ;; TODO Add argument to done-fn for success?
             ;; TODO Close via future? (.addListener ^ChannelFuture fut ChannelFutureListener/CLOSE)
             (let [command-logger (logging/command-logger logger chan command
-                                                         (fn []  (.close chan)))]
+                                                         (fn [s] (.write chan (if s "SUCCESS\n"
+                                                                                    "FAILED\n"))
+                                                                 (.close chan)))]
               (try
                 (commands/handle-command command args systems command-logger)
                 (catch Throwable t
                   (ex/exit-when-fatal t)
                   (error-all command-logger "Error handling command" command ":")
                   (error logger t)
-                  (logging/done command-logger)))))))
+                  (logging/done command-logger false)))))))
 
       (exceptionCaught [^ChannelHandlerContext ctx ^ExceptionEvent evt]
         (when @show-ex
