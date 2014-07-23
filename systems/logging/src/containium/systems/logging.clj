@@ -330,7 +330,7 @@
 
 (defn- bytes->string
   [^bytes bytes off len]
-  (let [s (String. bytes off len)]
+  (let [s (String. bytes (int off) (int len))]
     (if (.endsWith s linesep)
       (subs s 0 (- (count s) (count linesep)))
       s)))

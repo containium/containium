@@ -126,7 +126,7 @@
 
 (defn- finish-action
   [{:keys [name error status] :as module} manager command-logger]
-  (logging/done command-logger)
+  (logging/done command-logger (not error))
   (fire-event manager :finished name (Response. (not error) status))
   (assoc module :error false))
 
@@ -275,12 +275,12 @@
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
                    (error-command command-logger "Cannot" (clojure.core/name command) "module" name
                                   "while its" (clojure.core/name status))
-                   (logging/done command-logger))
+                   (logging/done command-logger false))
 
                :else
                (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
                    (error-command command-logger "No module named" name "known.")
-                   (logging/done command-logger)))))))
+                   (logging/done command-logger false)))))))
 
 
 (defn- deactivate-all
@@ -356,7 +356,7 @@
     (if-let [agent (@agents name)]
       (versions* @agent command-logger)
       (do (error-command command-logger "No module named" name "known.")
-          (logging/done command-logger))))
+          (logging/done command-logger false))))
 
   Stoppable
   (stop [this]
