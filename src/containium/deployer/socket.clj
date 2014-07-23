@@ -39,12 +39,10 @@
               ^Channel chan (.getChannel evt)
               [command & args] (commands/parse-quoted msg)]
           (when command
-            ;; TODO Add argument to done-fn for success?
-            ;; TODO Close via future? (.addListener ^ChannelFuture fut ChannelFutureListener/CLOSE)
-            (let [command-logger (logging/command-logger logger chan command
-                                                         (fn [s] (.write chan (if s "SUCCESS\n"
-                                                                                    "FAILED\n"))
-                                                                 (.close chan)))]
+            (let [close-fn (fn [status]
+                             (-> (.write chan (if status "SUCCESS\n" "FAILED\n"))
+                                 (.addListener ChannelFutureListener/CLOSE)))
+                  command-logger (logging/command-logger logger chan command close-fn)]
               (try
                 (commands/handle-command command args systems command-logger)
                 (catch Throwable t
