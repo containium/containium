@@ -115,20 +115,17 @@
                        (logging/done command-logger false)))
 
       "deactivate" (if name
-                     (do (modules/deactivate! (:modules systems) name command-logger)
-                         (logging/done command-logger true))
+                     (modules/deactivate! (:modules systems) name command-logger)
                      (do (error-command command-logger "Missing name argument.")
                          (logging/done command-logger false)))
 
       "kill" (if name
-               (do (modules/kill! (:modules systems) name command-logger)
-                   (logging/done command-logger true))
+               (modules/kill! (:modules systems) name command-logger)
                (do (error-command command-logger "Missing name argument.")
                    (logging/done command-logger false)))
 
       "versions" (if name
-                   (do (modules/versions (:modules systems) name command-logger)
-                       (logging/done command-logger true))
+                   (modules/versions (:modules systems) name command-logger)
                    (do (error-command command-logger "Missing name argument")
                        (logging/done command-logger false)))
 
