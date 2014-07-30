@@ -4,10 +4,13 @@
 
 (ns containium.deployer.watcher
   "A simple filesystem watcher."
+  (:require [containium.exceptions :as ex]
+            [containium.systems.logging :as logging :refer (refer-logging)])
   (:import [java.nio.file FileSystems StandardWatchEventKinds WatchService WatchKey WatchEvent
             ClosedWatchServiceException]
            [java.io File]
            [java.util.concurrent TimeUnit]))
+(refer-logging)
 
 
 ;;; The API of a watcher.
@@ -70,8 +73,8 @@
   "Creates a Watcher using a java.nio.WatchService. It starts it in a
   new Thread. One can optionally supply a handler function (see
   `set-handler` in the Watcher protocol)."
-  ([] (mk-watchservice nil))
-  ([handler]
+  ([logger] (mk-watchservice logger nil))
+  ([handler logger]
      (let [watchservice (-> (FileSystems/getDefault) .newWatchService)
            handler (atom handler)
            handler-fn (fn [event]
@@ -85,11 +88,12 @@
                              (.reset key))
                          :continue)
                        (catch ClosedWatchServiceException cwse
-                         (println "Stopping filesystem watcher."))
-                       (catch Exception e
-                         (println "Exception while polling for file system events:" e)
-                         (println "Stopping watching. Maybe improve this.")))
+                         (info logger "Stopping filesystem watcher."))
+                       (catch Throwable e
+                         (ex/exit-when-fatal e)
+                         (error logger "Exception while polling for file system events:" e)
+                         (error logger "Stopping watching. Maybe improve this.")))
                    (recur)
-                   (println "Filesystem watcher stopped.")))]
+                   (info logger "Filesystem watcher stopped.")))]
        (doto (Thread. run "watchservice") .start)
        (WatchServiceWatcher. watchservice handler (atom {})))))

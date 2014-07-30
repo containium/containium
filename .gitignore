@@ -3,6 +3,7 @@
 /classes
 /checkouts
 pom.xml.asc
+pom.xml
 *.jar
 *.class
 .lein-deps-sum
@@ -12,3 +13,4 @@ pom.xml.asc
 /.nrepl-port
 /data
 /codox
+/_target

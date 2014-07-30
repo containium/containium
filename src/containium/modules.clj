@@ -4,251 +4,374 @@
 
 (ns containium.modules
   "Functions for managing the starting and stopping of modules."
-  (:require [containium.systems :refer (require-system)]
+  (:require [containium.exceptions :as ex]
+            [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.systems.ring :refer (Ring upstart-box remove-box)]
+            [containium.systems.ring :refer (Ring upstart-box remove-box clean-ring-conf)]
             [containium.modules.boxes :refer (start-box stop-box)]
-            [clojure.edn :as edn])
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
+            [clojure.edn :as edn]
+            [clojure.core.async :as async :refer (<!!)]
+            [clojure.stacktrace :refer (print-cause-trace)])
   (:import [containium.systems Startable Stoppable]
-           [java.io File]))
+           [java.io File]
+           [java.net URL]
+           [java.util Collections Map$Entry]
+           [java.util.jar Manifest]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; Public system definitions.
 
+(defrecord Response [success? status])
+
+;; Events are put on the event-mult. Current events are:
+;;  :activate <name> descriptor-map
+;;  :deactivate <name>
+;;  :kill <name>
+;;  :status <name> status-keyword
+;;  :finished <name> Response-record
+(defrecord Event [type name data])
+
+
 (defprotocol Manager
-  (list-active [this]
+  (list-installed [this]
     "Returns a sequence of maps with :name and :state entries for the
-  currently active modules.")
+    currently installed modules.")
 
-  (deploy! [this name file]
-    "Try to deploy the file under the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+  (activate! [this name descriptor command-logger]
+    "Try to deploy, redeploy or swap the module under the specified
+    name. If a descriptor is already known from a previous deploy
+    action, it may be nil. When the activation is complete, `done` is
+    called on the command-logger.")
 
-  (undeploy! [this name]
-    "Try to undeploy the module with the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+  (deactivate! [this name command-logger]
+    "Try to undeploy the module with the specified name. When the
+    deactivation is complete, `done` is called on the command-logger.")
 
-  (redeploy! [this name]
-    "Try to redeploy the module with the specified name. A promise is
-  returned, which will eventually hold a Response record.")
+  (kill! [this name command-logger]
+    "Kills a module, whatever it's status. When the kill is complete,
+    `done` is called on the command-logger.")
 
-  (register-notifier! [this name f]
-    "Register a notifier function by name, which is called on events
-  happening regarding the modules. The function takes two arguments. The
-  first is the kind of event, and the second is a sequence of extra data
-  for that event. The following events are send:
+  (event-mult [this]
+    "Returns an async mult on which tapped channels receive module
+    management events. Please untap or close taps when they won't be
+    read from anymore.")
 
-  kind         | data
-  ------------------------------------------
-  :deployed    | [module-name file]
-  :failed      | [module-name]
-  :undeployed  | [module-name]")
-
-  (unregister-notifier! [this name]
-    "Remove a notifier by name."))
+  (versions [this name command-logger]
+    "Prints the *-Version MANIFEST entries it can find in the classpath
+    of the module. The following keys are filtered out:
+    Manifest-Version Implementation-Version Ant-Version
+    Specification-Version Archiver-Version Bundle-Version. The info is
+    logged through the given command-logger, on which `done` is called
+    after all the info has been given."))
 
 
-(defrecord Response [success message])
+(defn module-descriptor
+  "This function returns a module descriptor map, which at minimum contains:
+
+  {:file (File. \"/path/to/module\"), :profiles [:default]}
+
+  When `file` is a module file, it's contents is merged into the descriptor map.
+  In a later stage (i.e. start-box) the :name, :project and :profiles keys can be conj'd."
+  [^File file]
+  (assert file "Path to module, or module descriptor File required!")
+  (let [descriptor-defaults {:file file, :profiles [:default]}]
+    (assert (.exists file) (str file " does not exist."))
+    (if (.isDirectory file)
+      descriptor-defaults
+      ;; else if not a directory.
+      (if-let [module-map (try (let [data (edn/read-string {:readers *data-readers*} (slurp file))]
+                                 (when (map? data) data))
+                               (catch Throwable ex (ex/exit-when-fatal ex)))]
+        (let [file-str (str (:file module-map))
+              file (if-not (.startsWith file-str "/")
+                     (File. (.getParent file) file-str)
+                     (File. file-str))]
+          (assert (.exists file) (str file " does not exist."))
+          (merge descriptor-defaults module-map {:file file}))
+        ;; else if not a module descriptor file.
+        descriptor-defaults))))
 
 
 ;;; Default implementation.
 
-(defrecord Module [name state file box])
-
-
-(defn- notify
-  [manager type & args]
-  (doseq [f (vals @(:notifiers manager))]
-    (f type args)))
-
-
-(defn- send-to-module
-  [manager name f & args]
-  (if-let [agent (get @(:agents manager) name)]
-    (apply send agent f args)
-    (println "No module named" name "available.")))
-
-
-(defn- invalid-state
-  [{:keys [name] :as module} promise occupation-str]
-  (deliver promise (Response. false (str "Module " name " is " occupation-str ".")))
-  module)
-
-
-(defn- module-file
-  "Checks whether the file is a module file. This function returns a
-  triple. The first item is the (possibly updated) file. The second
-  item is the :containium map that needs to merged onto the project map
-  of the project map, but it may be nil. The third item is a vector of
-  profiles to apply when loading the module, which may be nil as well."
-  [^File file]
-  (if (.isDirectory file)
-    [file nil nil]
-    (if-let [module-map (try (edn/read-string (slurp file)) (catch Exception ex))]
-      [(File. file (str (:file module-map))) (:containium module-map) (:profiles module-map)]
-      [file nil nil])))
-
-
-(defn- do-deploy
-  [manager {:keys [name] :as module} file promise]
-  (let [[file containium-merge profiles] (module-file file)
-        boxure-config (-> (get-config (-> manager :systems :config) :modules)
-                          (assoc :profiles profiles))]
-    (if-let [box (start-box name file boxure-config (:systems manager))]
-      (let [box (assoc-in box [:project :containium]
-                          (merge (-> box :project :containium) containium-merge))]
-        (when (-> box :project :containium :ring)
-          (upstart-box (-> manager :systems :ring) name box))
-        (send-to-module manager name
-                        #(do (deliver promise (Response. true (str "Module " name
-                                                                   " successfully deployed.")))
-                             (notify manager :deployed name file)
-                             (assoc % :state :deployed :file file :box box))))
-      (send-to-module manager name
-                      #(do (deliver promise (Response. false (str "Error while deploying module "
-                                                                  name ".")))
-                           (notify manager :failed name)
-                           (assoc % :state :undeployed))))))
-
-
-(defn- handle-deploy
-  [{:keys [name state] :as module} manager file promise]
-  (case state
-    :deploying (invalid-state module promise "already deploying.")
-    :deployed (invalid-state module promise "already deployed.")
-    :redeploying (invalid-state module promise "currently redeploying.")
-    :swapping (invalid-state module promise "currently swapping.")
-    :undeploying (invalid-state module promise "currently undeploying.")
-    :undeployed (do (future (do-deploy manager module file promise))
-                    (notify manager :deploying name)
-                    (assoc module :state :deploying))))
-
-
-(defn- do-undeploy
-  [manager {:keys [name box] :as module} promise]
-  (let [response (if (do (when (-> box :project :containium :ring)
-                           (remove-box (-> manager :systems :ring) name))
-                         (stop-box name box))
-                   (Response. true (str "Module " name " successfully undeployed."))
-                   (Response. false (str "Error while undeploying module " name ".")))]
-    (send-to-module manager name
-                    #(do (deliver promise response)
-                         (notify manager :undeployed name)
-                         (assoc % :state :undeployed :box nil)))))
-
-
-(defn- handle-undeploy
-  [{:keys [name state] :as module} manager promise]
-  (case state
-    :deploying (invalid-state module promise "currently deploying.")
-    :redeploying (invalid-state module promise "currently redeploying.")
-    :swapping (invalid-state module promise "currently swapping.")
-    :undeploying (invalid-state module promise "already undeploying.")
-    :undeployed (invalid-state module promise "already undeployed.")
-    :deployed (do (future (do-undeploy manager module promise))
-                  (notify manager :undeploying name)
-                  (assoc module :state :undeploying))))
-
-
-(defn- do-redeploy
-  [manager {:keys [name file] :as module} promise]
-  (let [timeout (* 1000 30)
-        {:keys [success message] :as response} (deref (undeploy! manager name) timeout ::timeout)]
-    (if success
-      (let [{:keys [success message] :as response} (deref (deploy! manager name file)
-                                                          timeout ::timeout)]
-        (if success
-          (deliver promise (Response. true (str "Module " name " successfully redeployed.")))
-          (if (= response ::timeout)
-            (deliver promise (Response. false (str "Response for deployment while redeploying "
-                                                   "timed out. Deploying may still succeed.")))
-            (deliver promise (Response. false (str "Error while redeploying module " name
-                                                   ", reason: " message))))))
-      (if (= response ::timeout)
-        (deliver promise (Response. false (str "Response for undeployment while redeploying "
-                                               "timed out. Undeploying may still succeed.")))
-        (deliver promise (Response. false (str "Error while redeploying module " name
-                                                    ", reason: " message)))))))
-
-
-(defn- handle-redeploy
-  [{:keys [name state] :as module} manager promise]
-  (case state
-    :deploying (invalid-state module promise "already deploying")
-    :redeploying (invalid-state module promise "already redeploying")
-    :swapping (invalid-state module promise "already swapping")
-    :undeploying (invalid-state module promise "currently undeploying")
-    :undeployed (invalid-state module promise "undeployed, so cannot be redeployed")
-    :deployed (do (future (do-redeploy manager module promise))
-                  (notify manager :redeploying name)
-                  ;; (assoc module :state :redeploying)
-                  ;; --- TODO, above will be possible when queuing is implemented.
-                  module)))
+(defrecord Module [name status descriptor box ring-name error])
 
 
 (defn- agent-error-handler
-  [agent ^Exception exception]
-  (println "Exception in module agent:")
-  (.printStackTrace exception))
+  [logger agent ^Exception exception]
+  (error logger "Exception in module agent:" (.getMessage exception))
+  (error logger exception))
 
 
-(defrecord DefaultManager [config systems agents notifiers]
+(defn- new-agent
+  [{:keys [agents systems] :as manager} name]
+  (let [agent (agent (Module. name :undeployed nil nil nil false)
+                     :error-handler (partial agent-error-handler (:logging systems)))]
+    (swap! agents assoc name agent)
+    agent))
+
+
+(defn fire-event
+  ([manager type name]
+     (fire-event manager type name nil))
+  ([manager type name data]
+     (async/put! (:event-chan manager) (Event. type name data))))
+
+
+;;; Agent processing functions.
+
+(defn- finish-action
+  [{:keys [name error status] :as module} manager command-logger]
+  (logging/done command-logger (not error))
+  (fire-event manager :finished name (Response. (not error) status))
+  (assoc module :error false))
+
+
+(defn- update-status
+  ([module manager command-logger success-state]
+     (update-status module manager command-logger success-state nil))
+  ([{:keys [name error] :as module} manager command-logger success-state error-state]
+     (let [status (if error error-state success-state)]
+       (info-all command-logger "Module" name "status has changed to" (clojure.core/name status))
+       (fire-event manager :status name status)
+       (assoc module :status status))))
+
+
+(defn clean-descriptor [descriptor name]
+  (->
+    (if (-> descriptor :containium :ring)
+        (update-in descriptor [:containium :ring] clean-ring-conf)
+       #_else descriptor)
+    (assoc :name name)))
+
+
+(defn- do-deploy
+  [{:keys [name descriptor error] :as module} {:keys [systems] :as manager} command-logger
+   new-descriptor]
+  (if-not error
+    (if-let [descriptor (or new-descriptor descriptor)]
+      (try
+        (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
+              boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                                (assoc :profiles profiles))]
+          ;; Try to start the box.
+          (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
+            (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))
+                  ring-name (gensym name)]
+              ;; Register it with ring, if applicable.
+              (when (-> box :project :containium :ring)
+                (upstart-box (-> manager :systems :ring) ring-name box command-logger))
+              (info-all command-logger "Module" name "successfully deployed.")
+              (assoc module :box box :descriptor descriptor :ring-name ring-name))
+            ;; else if box failed to start.
+            (throw (Exception. (str "Box " name " failed to start.")))))
+        (catch Throwable ex
+          (error-all command-logger "Module" name "failed to deploy:" (.getMessage ex))
+          (assoc module :error true :descriptor descriptor)))
+      (do (error-command command-logger "Module" name
+                         "is new to containium, initial descriptor required.")
+          (assoc module :error true)))
+    module))
+
+
+(defn- do-undeploy
+  ([module manager command-logger]
+     (do-undeploy module manager command-logger nil))
+  ([{:keys [name box ring-name error] :as module} manager command-logger old]
+     (if-not error
+       (if (do (when (-> (or (:box old) box) :project :containium :ring)
+                 (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name)
+                             command-logger))
+               (stop-box name (or (:box old) box) command-logger (:systems manager)))
+         (do (info-all command-logger "Module" name "successfully undeployed.")
+             (if old module (dissoc module :box)))
+         (do (error-all command-logger "Module" name "failed to undeploy.")
+             (-> (if old module (dissoc module :box)) (assoc :error true))))
+       module)))
+
+
+;;; Protocol implementation functions.
+
+(defn- activate-action
+  [manager name agent command-logger {:keys [descriptor] :as args}]
+  (fire-event manager :activate name descriptor)
+  (let [agent (or agent (new-agent manager name))]
+    (case (:status @agent)
+      :undeployed
+      (do (info-all command-logger "Planning deployment action for module" name "...")
+          (send-off agent update-status manager command-logger :deploying)
+          (await agent)
+          (send-off agent do-deploy manager command-logger descriptor)
+          (send-off agent update-status manager command-logger :deployed :undeployed)
+          (send-off agent finish-action manager command-logger))
+
+      :deployed
+      (if (-> @agent :box :descriptor :containium :swappable?)
+        (let [before-swap-state @agent]
+          (info-all command-logger "Planning swap action for module" name "...")
+          (send-off agent update-status manager command-logger :swapping)
+          (await agent)
+          (send-off agent do-deploy manager command-logger descriptor)
+          (send-off agent do-undeploy manager command-logger before-swap-state)
+          (send-off agent update-status manager command-logger :deployed :deployed)
+          (send-off agent finish-action manager command-logger))
+        (do
+          (info-all command-logger "Planning redeploy action for module" name "...")
+          (send-off agent update-status manager command-logger :redeploying)
+          (await agent)
+          (send-off agent do-undeploy manager command-logger)
+          (send-off agent do-deploy manager command-logger descriptor)
+          (send-off agent update-status manager command-logger :deployed :undeployed)
+          (send-off agent finish-action manager command-logger))))))
+
+
+(defn- deactivate-action
+  [manager name agent command-logger]
+  (fire-event manager :deactivate name)
+  (info-all command-logger "Planning undeployment action for module" name "...")
+  (send-off agent update-status manager command-logger :undeploying)
+  (await agent)
+  (send-off agent do-undeploy manager command-logger)
+  (send-off agent update-status manager command-logger :undeployed :undeployed)
+  (send-off agent finish-action manager command-logger))
+
+
+(defn- kill-action
+  [{:keys [systems agents] :as manager} agent command-logger]
+  (let [{:keys [box name status]} @agent]
+    (fire-event manager :kill name)
+    (info-all command-logger "Killing module" name "...")
+    (swap! agents dissoc name)
+    (when box
+      (when (-> box :project :containium :ring)
+        (remove-box (:ring systems) (:ring-name name) command-logger))
+      (stop-box name box command-logger))
+    (info-all command-logger  "Module" name "successfully killed.")
+    (logging/done command-logger)))
+
+
+(defn- action
+  ([command manager name command-logger]
+     (action command manager name command-logger nil))
+  ([command manager name command-logger args]
+     (locking (.intern ^String name)
+       (let [agent (get @(:agents manager) name)
+             status (when agent (:status @agent))]
+         (cond (and (= command :activate) (or (nil? agent)
+                                              (contains? #{:undeployed :deployed} status)))
+               (activate-action manager name agent command-logger args)
+
+               (and (= command :deactivate) (= status :deployed))
+               (deactivate-action manager name agent command-logger)
+
+               (and (= command :kill) agent)
+               (async/thread (kill-action manager agent command-logger))
+
+               agent
+               (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
+                   (error-command command-logger "Cannot" (clojure.core/name command) "module" name
+                                  "while its" (clojure.core/name status))
+                   (logging/done command-logger false))
+
+               :else
+               (do (Thread/sleep 1000) ;; Minimize load, especially in deactivate-all.
+                   (error-command command-logger "No module named" name "known.")
+                   (logging/done command-logger false)))))))
+
+
+(defn- deactivate-all
+  [manager names]
+  (let [logger (-> manager :systems :logging)
+        command-logger (logging/stdout-command-logger logger "deactivate-all")
+        timeoutc (async/timeout 90000) ;;---TODO Make this configurable?
+        eventsc (async/chan)]
+    (async/tap (event-mult manager) eventsc)
+    (info logger "Deactivating all modules...")
+    (doseq [name names] (deactivate! manager name command-logger))
+    (<!! (async/go-loop [left (set names)]
+           (if (empty? left)
+             (info logger "Deactivated all modules.")
+             (let [[val channel] (async/alts! [eventsc timeoutc])]
+               (if (= channel timeoutc)
+                 (warn logger "Deactivation of all modules timed out. The following modules could"
+                       "not be undeployed:" (apply str (interpose ", " left)))
+                 (let [{:keys [type name data] :as event} val]
+                   (if (= type :finished)
+                     (case (:status data)
+                       :undeployed (recur (disj left name))
+                       :deployed (do (deactivate! manager name command-logger)
+                                     (recur (conj left name))))
+                     (recur left))))))))
+    (async/untap (event-mult manager) eventsc)
+    (async/close! eventsc)))
+
+
+(defn- versions*
+  [module command-logger]
+  (if-let [^ClassLoader box-cl (-> module :box :box-cl)]
+    (doseq [^URL resource (Collections/list (.getResources box-cl "META-INF/MANIFEST.MF"))]
+      (with-open [stream (.openStream resource)]
+        (let [mf (Manifest. stream)
+              version-entries (filter (fn [^Map$Entry e]
+                                        (let [name (.. e getKey toString)]
+                                          (and (.endsWith name "-Version")
+                                               (not (#{"Manifest-Version"
+                                                       "Implementation-Version"
+                                                       "Ant-Version"
+                                                       "Specification-Version"
+                                                       "Archiver-Version"
+                                                       "Bundle-Version"} name)))))
+                                      (.entrySet (.getMainAttributes mf)))]
+          (doseq [^Map$Entry entry version-entries]
+            (info-command command-logger (.. entry getKey toString) ":" (.getValue entry))))))
+    (error-command command-logger "Module" (:name module) "not running."))
+  (logging/done command-logger))
+
+
+(defrecord DefaultManager [config systems agents event-chan event-mult]
   Manager
-  (list-active [_]
+  (list-installed [_]
     (keep (fn [[name agent]]
-            (let [state (:state @agent)]
-              (when (not= :undeployed state)
-                {:name name :state state})))
+            (if-let [status (:status @agent)]
+              {:name name :status status}))
           @agents))
 
-  (deploy! [this name file]
-    (swap! agents (fn [current name]
-                    (if-not (current name)
-                      (assoc current name (agent (Module. name :undeployed nil nil)
-                                                 :error-handler agent-error-handler))
-                      current)) name)
-    (let [promise (promise)]
-      (send-to-module this name handle-deploy this file promise)
-      promise))
+  (activate! [this name descriptor command-logger]
+    (action :activate this name command-logger {:descriptor descriptor}))
 
-  (undeploy! [this name]
-    (if (@agents name)
-      (let [promise (promise)]
-        (send-to-module this name handle-undeploy this promise)
-        promise)
-      (future (Response. false (str "No module named " name " known.")))))
+  (deactivate! [this name command-logger]
+    (action :deactivate this name command-logger))
 
-  (redeploy! [this name]
-    (if (@agents name)
-      (let [promise (promise)]
-        (send-to-module this name handle-redeploy this promise)
-        promise)
-      (future (Response. false (str "No module named " name " known.")))))
+  (kill! [this name command-logger]
+    (action :kill this name command-logger))
 
-  (register-notifier! [_ name f]
-    (swap! notifiers assoc name f))
+  (event-mult [this]
+    event-mult)
 
-  (unregister-notifier! [_ name]
-    (swap! notifiers dissoc name))
+  (versions [_ name command-logger]
+    (if-let [agent (@agents name)]
+      (versions* @agent command-logger)
+      (do (error-command command-logger "No module named" name "known.")
+          (logging/done command-logger false))))
 
   Stoppable
   (stop [this]
-    (if-let [to-undeploy (seq (remove #(= :undeployed (:state (deref (val %)))) @agents))]
-      (let [names+promises (for [[name agent] to-undeploy] [name (undeploy! this name)])
-            timeout (* 1000 30)]
-        (doseq [[name promise] names+promises]
-          (println (:message (deref promise timeout
-                                    (Response. false (str "Response for undeploying " name
-                                                          " timed out."))))))
-        (Thread/sleep 1000)
-        (recur))
-      (println "All modules are undeployed."))))
+    (when-let [to-undeploy (keys (remove #(= :undeployed (:status (deref (val %)))) @agents))]
+      (deactivate-all this to-undeploy))))
 
+
+;;; Constructor function.
 
 (def default-manager
   (reify Startable
     (start [_ systems]
-      (require-system Ring systems)
-      (let [config (require-system Config systems)]
-        (println "Started default Module manager.")
-        (DefaultManager. config systems (atom {}) (atom {}))))))
+      (assert (:ring systems))
+      (let [config (require-system Config systems)
+            logger (require-system SystemLogger systems)
+            event-chan (async/chan)]
+        (info logger "Started default Module manager.")
+        (DefaultManager. config systems (atom {}) event-chan (async/mult event-chan))))))

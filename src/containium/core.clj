@@ -4,113 +4,58 @@
 
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
-            [containium.systems.cassandra :as cassandra]
+            [containium.systems.cassandra.embedded12 :as cassandra]
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
+            [containium.systems.ring.http-kit :as http-kit]
+            [containium.systems.ring.jetty9 :as jetty9]
             [containium.systems.ring-session-cassandra :as cass-session]
             [containium.deployer :as deployer]
+            [containium.deployer.socket :as socket]
             [containium.systems.config :as config]
             [containium.modules :as modules]
             [containium.systems.repl :as repl]
+            [containium.systems.ring-analytics :as ring-analytics]
+            [containium.systems.mail :as mail]
+            [containium.systems.logging :as logging :refer (refer-logging)]
+            [containium.exceptions :as ex]
+            [containium.commands :as commands]
             [clojure.java.io :refer (resource as-file)]
-            [clojure.string :refer (split trim)]
-            [clojure.tools.nrepl.server :as nrepl]
-            [clojure.pprint :refer (pprint print-table)])
+            [clojure.tools.nrepl.server :as nrepl])
   (:import [jline.console ConsoleReader]
            [java.util Timer TimerTask])
   (:gen-class))
+(refer-logging)
 
 
 ;;; Globals for REPL access. A necessary evil.
 
-(def systems nil)
+(defonce systems nil)
+
+(defmacro eval-in
+  "Evaluate the given `forms` (in an implicit do) in the module identified by `name`."
+  [name & forms]
+
+  (let [box @(get @(get-in systems [:modules :agents]) name)]
+    (assert box (str "Module not found: " name))
+    `(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
+                        '(try (do ~@forms)
+                              (catch Throwable e# (do (.printStackTrace e#) e#))))))
+
+(defmacro command
+  "Call console commands from the REPL. For example:
+  (command module versions foo)."
+  [cmd & args]
+  (let [cmd (str cmd)
+        args (mapv str args)]
+    `(print (with-out-str
+              (handle-command ~cmd ~args systems
+                              (logging/stdout-command-logger (:logging systems) ~cmd))))))
+
 
 
 ;;; Command loop.
-
-(defmulti handle-command
-  "This multi-method dispatches on the command argument. It also
-  receives the command arguments and the systems map. The result of this command is ignored."
-  (fn [command args systems] command))
-
-
-(defmethod handle-command :default
-  [command _ _]
-  (println "Unknown command:" command)
-  (println "Type 'help' for info on the available commands."))
-
-
-(defmethod handle-command "help"
-  [_ _ _]
-  (println (str "Available commands are:"
-                "\n"
-                "\n module <list|deploy|undeploy|redeploy> [name [path]]"
-                "\n   Prints a list of running modules, deploys a module by name and path, or"
-                "\n   undeploys/redeploys a module by name. Paths can point to a directory or"
-                "\n   to a JAR file."
-                "\n"
-                "\n repl <start|stop> [port]"
-                "\n   Starts an nREPL at the specified port, or stops the current one, inside"
-                "\n   the containium."
-                "\n"
-                "\n shutdown"
-                "\n   Stops all boxes and systems gracefully."
-                "\n"
-                "\n threads"
-                "\n   Prints a list of all threads.")))
-
-
-(defmethod handle-command "repl"
-  [_ args systems]
-  (let [[action port-str] args]
-    (case action
-      "start" (if port-str
-                (if-let [port (try (Integer/parseInt port-str) (catch Exception ex))]
-                  (repl/open-repl (:repl systems) port)
-                  (println "Invalid port number:" port-str))
-                (repl/open-repl (:repl systems)))
-      "stop" (repl/close-repl (:repl systems))
-      (println (str "Unknown action '" action "', please use 'start' or 'stop'.")))))
-
-
-(defmethod handle-command "threads"
-  [_ _ _]
-  (let [threads (keys (Thread/getAllStackTraces))]
-    (println (apply str "Current threads (" (count threads) "):\n  "
-                    (interpose "\n  " threads)))))
-
-
-(defmethod handle-command "module"
-  [_ args systems]
-  (let [[action name path] args
-        timeout (* 1000 60)]
-    (case action
-      "list" (print-table (modules/list-active (:modules systems)))
-      "deploy" (if (and name path)
-                 (future (println (:message (deref (modules/deploy! (:modules systems) name
-                                                                    (as-file path))
-                                                   timeout
-                                                   {:message (str "Deployment of " name
-                                                                  " timed out.")}))))
-                 (println "Missing name and/or path argument."))
-      "undeploy" (if name
-                   (future (println (:message (deref (modules/undeploy! (:modules systems) name)
-                                                     timeout
-                                                     {:message (str "Undeployment of " name
-                                                                    " timed out.")}))))
-                   (println "Missing name argument."))
-      "redeploy" (if name
-                   (future (println (:message (deref (modules/redeploy! (:modules systems) name)
-                                                     timeout
-                                                     {:message (str "Redeployment of " name
-                                                                    " timed out.")}))))
-                   (println "Missing name argument."))
-      (if action
-        (println (str "Unknown action '" action "', see help."))
-        (println "Missing action argument, see help.")))))
-
-
 
 (defn command-loop
   "This functions starts the command loop. It uses the handle-command
@@ -118,18 +63,20 @@
   See the documentation on the handle-command for more info on this.
   When this function returns (of which its value is of no value, pun
   intended), the `shutdown` command has been issued."
-  [systems]
-  (let [jline (ConsoleReader.)]
+  [{:keys [logging] :as systems}]
+  (let [jline (ConsoleReader. System/in @#'containium.systems.logging/stdout)]
     (loop []
-      (let [[command & args] (split (trim (.readLine jline "containium> ")) #"\s+")]
+      (let [[command & args] (commands/parse-quoted (.readLine jline "containium> "))]
         (case command
-          "" (recur)
+          nil (recur)
           "shutdown" nil
           (do (try
-                (handle-command command args systems)
+                (commands/handle-command command args systems
+                                         (logging/stdout-command-logger (:logging systems) command))
                 (catch Throwable t
-                  (println "Error handling command" command ":")
-                  (.printStackTrace t)))
+                  (ex/exit-when-fatal t)
+                  (error logging "Error handling command" command ":")
+                  (error logging t)))
               (recur)))))))
 
 
@@ -137,16 +84,25 @@
 
 (defn shutdown-timer
   "Start a timer that shows debug information, iff the JVM has not
-  shutdown yet and `wait` seconds have passed."
-  [wait]
+  shutdown yet and `wait` seconds have passed. If the `kill?` argument
+  is set to true, containium will be force-terminated as well."
+  [wait kill?]
   (let [timer (Timer. "shutdown-timer" true)
         task (proxy [TimerTask] []
                (run []
                  (let [threads (keys (Thread/getAllStackTraces))]
                    (println (apply str "Threads still running (" (count threads) "):\n  "
-                                   (interpose "\n  " threads))))))]
+                                   (interpose "\n  " threads))))
+                 (when kill? (System/exit 1))))]
     (.schedule timer task (int (* wait 1000)))))
 
+;;; Daemon control
+
+(def ^java.util.concurrent.CountDownLatch daemon-latch (java.util.concurrent.CountDownLatch. 1))
+(defn shutdown []
+  (println "Received kill.")
+  (.countDown daemon-latch)
+  (Thread/sleep 1337))
 
 ;;; The coordinating functions.
 
@@ -160,18 +116,44 @@
   (deployer/bootstrap-modules (:fs sys))
   (command-loop sys))
 
+(defn run-daemon
+  "Same as 'run but without the command-loop"
+  [sys]
+  (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. ^Runnable shutdown))
+  (println "Waiting for the kill.")
+  (alter-var-root #'systems (constantly sys))
+  (deployer/bootstrap-modules (:fs sys))
+  (.await daemon-latch))
+
 
 (defn -main
-  [& args]
-  (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
-                         :cassandra cassandra/embedded12
-                         :elastic elastic/embedded
-                         :kafka kafka/embedded
-                         :ring ring/http-kit
-                         :session-store cass-session/embedded
-                         :modules modules/default-manager
-                         :fs deployer/directory
-                         :repl repl/nrepl]
-    (run systems))
-  (shutdown-agents)
-  (shutdown-timer 10))
+  "Launches containium process.
+
+  When run with no arguments: interactive console is started.
+  Any other argument will activate daemon mode."
+  [& [daemon? args]]
+  (ex/register-default-handler)
+  (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
+                              :logging logging/logger
+                              :mail mail/postal
+                              :cassandra cassandra/embedded12
+                              :elastic elastic/embedded
+                              :kafka kafka/embedded
+                              :session-store cass-session/default
+                              :ring-analytics ring-analytics/elasticsearch
+                              :http-kit http-kit/http-kit
+                              :jetty9 jetty9/jetty9
+                              :ring ring/distributed
+                              :modules modules/default-manager
+                              :fs deployer/directory
+                              :repl repl/nrepl
+                              ;; Socket needs to be the last system,
+                              ;;  otherwise it doesn’t have the :repl system available.
+                              :socket socket/socket]
+         ((if daemon? run-daemon #_else run) systems))
+       (catch Exception ex
+         (.printStackTrace ex))
+       (finally
+         (println "Shutting down...")
+         (shutdown-agents)
+         (shutdown-timer 15 daemon?))))

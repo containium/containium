@@ -4,6 +4,7 @@
 
 (ns containium.systems
   "Logic for starting and stopping systems."
+  (:require [containium.exceptions :as ex])
   (:import [clojure.lang Compiler]))
 
 
@@ -22,28 +23,52 @@
   (stop [this]))
 
 
+(defn- start-systems
+  [system-components]
+  (loop [to-start system-components
+         started nil]
+    (if-let [[name system] (first to-start)]
+      (let [result (if (satisfies? Startable system)
+                      (try
+                        (start system (into {} started))
+                        (catch Throwable ex
+                          (ex/exit-when-fatal ex)
+                          ex))
+                      system)]
+        (if-not (instance? Throwable result)
+          (recur (rest to-start) (conj started [name result]))
+          (do (println "Exception while starting system component" name "-" result)
+              (.printStackTrace ^Throwable result)
+              [started result])))
+      [started nil])))
+
+
+(defn- stop-systems
+  [started-components]
+  (doseq [[name system] started-components]
+    (when (satisfies? Stoppable system)
+      (try
+        (stop system)
+        (catch Throwable ex
+          (ex/exit-when-fatal ex)
+          (println "Exception while stopping system component" name "-" ex)
+          (.printStackTrace ex))))))
+
+
 (defmacro with-systems*
   [symbol system-components body]
-  (if-let [[name system] (first system-components)]
-    `(try
-       (let [system# ~system
-             system# (if (satisfies? Startable system#) (start system# ~symbol) system#)
-             ~symbol (assoc ~symbol ~name system#)]
-         (with-systems* ~symbol ~(rest system-components) ~body)
-         (when (satisfies? Stoppable system#)
-           (try
-             (stop system#)
-             (catch Throwable ex#
-               (println "Exception while stopping system component" ~name "-" ex#)
-               (.printStackTrace ex#)))))
-       (catch Throwable ex#
-         (println "Exception while starting system component" ~name "-" ex#)
-         (.printStackTrace ex#)))
-    `(try
-      ~@body
-      (catch Throwable ex#
-        (println "Exception while running `with-systems` body. Stopping systems.")
-        (.printStackTrace ex#)))))
+  `(let [[started# ex#] (#'start-systems ~system-components)
+         ex# (if ex#
+               ex#
+               (try
+                 (let [~symbol (into {} started#)] ~@body nil)
+                 (catch Throwable ex#
+                   (ex/exit-when-fatal ex#)
+                   (println "Exception while running `with-systems` body. Stopping systems.")
+                   (.printStackTrace ex#)
+                   ex#)))]
+     (#'stop-systems started#)
+     (when ex# (throw ex#))))
 
 
 (defmacro with-systems
@@ -55,15 +80,11 @@
   the system implementation and/or Startable. If it is a Startable,
   the return value of the `start` function is considered to be the
   system. It is also that system on which `stop` is called, if it
-  satisfies Stoppable.
-
-  Use the `protocol-forwarder` macro to use protocol implementation
-  inside modules."
+  satisfies Stoppable."
   [symbol system-components & body]
   (assert (even? (count system-components))
           "System components vector needs to have an even number of forms.")
-  `(let [~symbol {}]
-     (with-systems* ~symbol ~(partition 2 system-components) ~body)))
+  `(with-systems* ~symbol (partition 2 ~system-components) ~body))
 
 
 (defn require-system
@@ -78,27 +99,47 @@
                               " systems found satisfying protocol " (:on protocol)))))))
 
 
-(defmacro protocol-forwarder
-  "Reifies a protocol that forwards all calls to an existing
-  implementation. For example:
+(defn protocol-forwarder "DEPRECATED" [protocol] identity)
 
-  (defprotocol Foo (bar [this baz]))
 
-  (deftype FooImpl [] Foo (bar [_ baz] (prn baz)))
+(defn forward-protocol
+  "Extends the given object or class with the given protocol. The
+  protocol implementation merely forwards the functions. This is used
+  for using objects via the protocol, which already satisfy that
+  protocol, but in another Clojure runtime. If the given object or
+  class already implements or satisfies the protocol, this is a noop."
+  [object-or-class protocol]
+  (assert object-or-class "object or class cannot be nil")
+  (assert (#'clojure.core/protocol? protocol) "protocol argument must point to a protocol")
+  (let [class (if (class? object-or-class) object-or-class (class object-or-class))]
+    (try
+      (extend class protocol
+              (into {} (for [sig (:sigs protocol)
+                             :let [{:keys [name arglists]} (val sig)]]
+                         [(keyword name)
+                          (eval `(fn ~@(for [arglist arglists]
+                                         `(~arglist
+                                            ; Systems currently run in the root Classloader context
+                                            ; but this could be changed to isolated systems using
+                                            ; a different ns-root binding:
+                                            (binding [*ns-root* (.getRawRoot #'*ns-root*)]
+                                              (~(symbol (str "." (Compiler/munge (str name))))
+                                                         ~@arglist))))))])))
+      (catch IllegalArgumentException iae))))
 
-  (def foo-forwarder (protocol-forwarder Foo))
 
-  (bar (foo-forwarder (FooImpl.)) 'alice) ; prints alice.
-
-  A forwarder is useful in case a protocol does not recognize the
-  implementation as such."
-  [protocol]
-  (let [impl (gensym "impl")]
-    `(fn [~impl]
-       (reify ~protocol
-         ~@(for [sig (:sigs (eval protocol))
-                 :let [{:keys [name arglists]} (val sig)]
-                 arglist arglists]
-             `(~name ~arglist (. ~impl
-                                 ~(symbol (Compiler/munge (str name)))
-                                 ~@(rest arglist))))))))
+(defn forward-systems
+  "This function should be called from within an isolated Clojure
+  runtime (boxure), so the system protocols work on the values in the
+  system map."
+  [systems]
+  (let [keyword->protocol {:cassandra 'containium.systems.cassandra/Cassandra
+                           :elastic 'containium.systems.elasticsearch/Elastic
+                           :kafka 'containium.systems.kafka/Kafka
+                           :session-store 'ring.middleware.session.store/SessionStore
+                           :mail 'containium.systems.mail/Mail}]
+    (doseq [[keyword system] systems
+            :let [protocol (keyword->protocol keyword)]
+            :when protocol]
+      (require (symbol (namespace protocol)))
+      (forward-protocol system (eval protocol)))))

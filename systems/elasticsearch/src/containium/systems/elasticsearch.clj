@@ -4,35 +4,39 @@
 
 (ns containium.systems.elasticsearch
   (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (Config get-config)])
+            [containium.systems.config :refer (Config get-config)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import [containium.systems Startable Stoppable]
            [org.elasticsearch.node Node NodeBuilder]))
+(refer-logging)
 
 
 ;;; The public API for Elastic systems.
 
 (defprotocol Elastic
-  (whut? [this])) ;;--- FIXME: What would be a good API for Elastic?
+  (^org.elasticsearch.node.Node node [this]
+    "Returns the Node object used connecting.")) ;;---TODO: Is this a good API?
 
 
 ;;; The embedded implementation.
 
-(defrecord EmbeddedElastic [^ Node node]
+(defrecord EmbeddedElastic [^Node node logger]
   Elastic
-  (whut? [_])
+  (node [_] node)
 
   Stoppable
   (stop [_]
-    (println "Stopping embedded ElasticSearch node...")
+    (info logger "Stopping embedded ElasticSearch node...")
     (.close node)
-    (println "Embedded ElasticSearch node stopped.")))
+    (info logger "Embedded ElasticSearch node stopped.")))
 
 
 (def embedded
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :elastic)
-            _ (println "Starting embedded ElasticSearch node, using config" config "...")
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting embedded ElasticSearch node, using config" config "...")
             node (.node (NodeBuilder/nodeBuilder))]
-        (println "Embedded ElasticSearsch node started.")
-        (EmbeddedElastic. node)))))
+        (info logger "Embedded ElasticSearsch node started.")
+        (EmbeddedElastic. node logger)))))

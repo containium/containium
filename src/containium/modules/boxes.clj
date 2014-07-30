@@ -4,8 +4,17 @@
 
 (ns containium.modules.boxes
   "Logic for starting and stopping boxes."
-  (:require [boxure.core :refer (boxure) :as boxure]))
+  (:require [boxure.core :refer (boxure) :as boxure]
+            [leiningen.core.project]
+            [clojure.core.async :as async]
+            [containium.systems.logging :as logging :refer (refer-logging refer-command-logging)]
+            [containium.exceptions :as ex]
+            [ring.util.codec] ; load codec, because it is shared with boxes
+            [postal.core]))
+(refer-logging)
+(refer-command-logging)
 
+(def meta-merge #'leiningen.core.project/meta-merge)
 
 (defn- check-project
   [project]
@@ -32,45 +41,68 @@
 
 (defn start-box
   "The logic for starting a box. Returns the started box."
-  [name file boxure-config systems]
-  (println "Starting module" name "using file" file "...")
+  [{:keys [name file] :as descriptor} boxure-config {:keys [logging] :as systems} command-logger]
+  (info-all command-logger "Starting module" name "using file" file "...")
   (try
-    (let [project (boxure/file-project file)]
+    (let [project (boxure/file-project file (:profiles descriptor))]
       (if-let [errors (seq (check-project project))]
-        (apply println "Could not start module" name "for the following reasons:\n  "
-               (interpose "\n  " errors))
-        (let [box (boxure boxure-config (.getClassLoader clojure.lang.RT) file)
-              module-config (:containium project)
-              start-fn @(boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
+        (error-all command-logger "Could not start module" name "for the following reasons:\n  "
+                   (apply str (interpose "\n  " errors)))
+        (let [module-config (meta-merge (:containium project) (:containium descriptor))
+              boxure-config (if-let [module-isolates (:isolates module-config)]
+                              (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
+                              #_else boxure-config)
+              box-debug (System/getenv "BOXDEBUG")
+              box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
+              injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
+                                                          (str "containium\\.(?!core|utils).*"
+                                                               "|ring\\.middleware.*"
+                                                               "|ring\\.util\\.codec.*"
+                                                               "|postal.*"
+                                                               "|org\\.httpkit.*"))]
+                                            (dosync (commute @#'clojure.core/*loaded-libs*
+                                                             #(apply conj % (keys injected))))
+                                            injected))
+              _ (trace logging "Loaded after namespace injection: "
+                       (boxure/eval box @#'clojure.core/*loaded-libs*))
+              active-profiles (-> (meta project) :active-profiles set)
+              descriptor (merge {:dev? (not (nil? (active-profiles :dev)))} ; implicit defaults
+                                descriptor ; descriptor overrides implicits
+                                {:project project
+                                 :active-profiles active-profiles
+                                 :containium module-config})
+              start-fn (boxure/eval box `(do (require '~(symbol (namespace (:start module-config))))
                                               ~(:start module-config)))]
-          (if (instance? Throwable start-fn)
-            (do (boxure/clean-and-stop box)
-                (throw start-fn))
-            (try
-              (let [start-result (boxure/call-in-box box start-fn systems)]
-                (println "Module" name "started.")
-                (assoc box :start-result start-result))
-              (catch Throwable ex
-                (boxure/clean-and-stop box)
-                (throw ex)))))))
+          (when (instance? Throwable start-fn) (boxure/clean-and-stop box) (throw start-fn))
+          (try
+            (let [start-result (boxure/call-in-box box (start-fn systems descriptor))]
+              (info-all command-logger "Module" name "started.")
+              (assoc box :start-result start-result, :descriptor descriptor))
+            (catch Throwable ex
+              (ex/exit-when-fatal ex)
+              (boxure/clean-and-stop box)
+              (throw ex))))))
     (catch Throwable ex
-      (println "Exception while starting module" name ":" ex)
-      (.printStackTrace ex))))
+      (ex/exit-when-fatal ex)
+      (error-all command-logger "Exception while starting module" name ":" ex)
+      (error logging ex))))
 
 
 (defn stop-box
-  [name box]
+  [name box command-logger {:keys [logging] :as systems}]
   (let [module-config (-> box :project :containium)]
-    (println "Stopping module" name "...")
+    (info-all command-logger "Stopping module" name "...")
     (try
-      (let [stop-fn @(boxure/eval box
+      (let [stop-fn (boxure/eval box
                                   `(do (require '~(symbol (namespace (:stop module-config))))
                                        ~(:stop module-config)))]
-        (boxure/call-in-box box stop-fn (:start-result box))
+        (boxure/call-in-box box (stop-fn (:start-result box)))
         :stopped)
       (catch Throwable ex
-        (println "Exception while stopping module" name ":" ex)
-        (.printStackTrace ex))
+        (error-all command-logger "Exception while stopping module" name ":" ex)
+        (ex/exit-when-fatal ex)
+        (error ex))
       (finally
+        (boxure.BoxureClassLoader/cleanThreadLocals)
         (boxure/clean-and-stop box)
-        (println "Module" name "stopped.")))))
+        (info-all command-logger "Module" name "stopped.")))))

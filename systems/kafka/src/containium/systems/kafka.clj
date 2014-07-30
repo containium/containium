@@ -4,22 +4,23 @@
 
 (ns containium.systems.kafka
   (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (get-config Config)])
+            [containium.systems.config :refer (get-config Config)]
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import  [containium.systems Startable Stoppable]
             [kafka.server KafkaConfig KafkaServer]
-            [kafka.javaapi.producer Producer ProducerData]
-            [kafka.producer ProducerConfig]
             [java.util Properties]))
+(refer-logging)
 
 
 ;;; The public API of the Kafka system.
 
 (defprotocol Kafka
-  (send-message [this topic message]))
+  (get-server [this]))
 
 
 ;;; The embedded implementation.
 
+;FIXME: remove this copy of map->properties when prime-vo-kafka is a separate small library.
 (defn- map->properties
   ([map]
      (map->properties map (Properties.)))
@@ -31,29 +32,26 @@
      properties))
 
 
-(defrecord EmbeddedKafka [^KafkaServer server ^Producer producer]
+(defrecord EmbeddedKafka [^KafkaServer server logger]
   Kafka
-  (send-message [_ topic message]
-    (.send producer (ProducerData. ^String topic message)))
+  (get-server [_] server)
 
   Stoppable
   (stop [_]
-    (println "Stopping embedded Kafka...")
-    (.close producer)
+    (info logger "Stopping embedded Kafka...")
     (.shutdown server)
-    (println "Waiting for embedded Kafka to be fully stopped.")
+    (info logger "Waiting for embedded Kafka to be fully stopped.")
     (.awaitShutdown server)
-    (println "Embedded Kafka fully stopped.")))
+    (info logger "Embedded Kafka fully stopped.")))
 
 
 (def embedded
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :kafka)
-            _ (println "Starting embedded Kafka using config:" config)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting embedded Kafka using config:" config)
             server-properties (map->properties (:server config))
-            server (doto (KafkaServer. (KafkaConfig. server-properties)) .startup)
-            producer-properties (map->properties (:producer config))
-            producer (Producer. (ProducerConfig. producer-properties))]
-        (println "Embedded Kafka started.")
-        (EmbeddedKafka. server producer)))))
+            server (doto (KafkaServer. (KafkaConfig. server-properties) (kafka.utils.SystemTime$/MODULE$)) .startup)]
+        (info logger "Embedded Kafka started.")
+        (EmbeddedKafka. server logger)))))

@@ -4,14 +4,19 @@
 
 (ns containium.deployer
   (:require [containium.systems :refer (require-system)]
-            [containium.systems.config :refer (Config get-config)]
-            [containium.modules :refer (Manager deploy! redeploy! undeploy!
-                                                       register-notifier! unregister-notifier!)]
-            [containium.deployer.watcher :refer (mk-watchservice watch close)]
-            [clojure.java.io :refer (file)])
+            [containium.systems.config :as config :refer (Config)]
+            [containium.modules :as modules :refer (Manager)]
+            [containium.systems.logging :as logging
+             :refer (SystemLogger refer-logging refer-command-logging)]
+            [containium.deployer.watcher :as watcher]
+            [clojure.java.io :refer (file as-file)]
+            [clojure.core.async :as async :refer (<!)]
+            [clojure.edn :as edn])
   (:import [containium.systems Startable Stoppable]
            [java.nio.file Path WatchService]
            [java.io File]))
+(refer-logging)
+(refer-command-logging)
 
 
 ;;; Public API for Deployer systems.
@@ -23,63 +28,116 @@
 
 ;;; File system implementation.
 
-(def ignore-files-re #".*\.status|\..*")
+;;---TODO Replace regexes with simpler/faster .endsWith calls?
+(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status|deactivated)$).)+")
+(def ^:private activate-files-re   #"[^\.].*\.activate")
 
 
-(defn- handle-notification
-  [dir kind [module-name]]
-  (spit (file dir (str module-name ".status")) (name kind)))
+(defn- fs-event-handler
+  [manager logger dir kind ^Path path]
+  (let [filename (.. path getFileName toString)]
+    (cond
+     ;; Creation or touch of .activate file.
+     (and (#{:create :modify} kind) (re-matches activate-files-re filename))
+     (do (.delete (file dir filename))
+         (let [name (subs filename 0 (- (count filename) (count ".activate")))
+               file (file dir name)]
+           (if (.exists file)
+             (try
+               (info logger "Activating" name "by filesystem event.")
+               (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
+                     command-logger (logging/stdout-command-logger logger "activate")]
+                 (modules/activate! manager name descriptor command-logger))
+               (catch Exception ex
+                 (error logger "Could not activate" name "-" ex)))
+             (error logger "Could not find" (str file) "in deployments directory."))))
+     ;; Deletion of descriptor file
+     (and (= :delete kind) (re-matches descriptor-files-re filename))
+     (try
+       (info logger "Deactivating" filename "by filesystem event.")
+       (modules/deactivate! manager filename (logging/stdout-command-logger logger "deactivate"))
+       (catch Exception ex
+         (error logger "Could not deactivate" filename "-" ex))))))
 
 
-(defn- handle-event
-  [manager dir kind file-or-path]
-  (let [file-name (if (instance? Path file-or-path)
-                    (.. ^Path file-or-path getFileName toString)
-                    (.getName ^File file-or-path))
-        timeout (* 1000 60)]
-    (when-not (re-matches ignore-files-re file-name)
-      (let [response (case kind
-                       :create (deref (deploy! manager file-name (file dir file-name))
-                                      timeout ::timeout)
-                       :modify (deref (redeploy! manager file-name) timeout ::timeout)
-                       :delete (deref (undeploy! manager file-name) timeout ::timeout))]
-        (if (= ::timeout response)
-          (println "Response for file system deployer action for" file-name "timed out."
-                   "\nThe action may have failed or may still complete.")
-          (println "File system deployer action for" file-name ":" (:message response)))))))
+(defn- module-event-loop
+  ([dir ] (module-event-loop dir (async/chan 10)))
+  ([dir chan]
+     (let [descriptors (atom {})]
+       (async/go-loop []
+         (when-let [msg (<! chan)]
+           (let [name (:name msg)]
+             (case (:type msg)
+               :activate
+               (when-let [descriptor (:data msg)]
+                 (swap! descriptors assoc name (update-in descriptor [:file] str)))
+
+               :deactivate
+               (loop [postfix nil]
+                 (when (.exists (file dir name))
+                   (when-not (.renameTo (file dir name)
+                                        (file dir (str name
+                                                       (when postfix (str "-" postfix))
+                                                       ".deactivated")))
+                     (recur (inc (or postfix 0))))))
+
+               :status
+               (spit (file dir (str name ".status"))
+                     (clojure.core/name (:data msg)))
+
+               :kill
+               (loop [postfix nil]
+                 (when (.exists (file dir name))
+                   (when-not (.renameTo (file dir name)
+                                        (file dir (str name
+                                                       (when postfix (str "-" postfix))
+                                                       ".deactivated")))
+                     (recur (inc (or postfix 0))))))
+
+               :finished
+               (let [response (:data msg)]
+                 (when (and (= :deployed (:status response)) (:success? response))
+                   (spit (file dir name) (get @descriptors name))))))
+           (recur))))
+     chan))
 
 
-(defrecord DirectoryDeployer [manager ^File dir watcher]
+(defrecord DirectoryDeployer [manager logger ^File dir watcher module-event-tap]
   Deployer
   (bootstrap-modules [_]
-    (doseq [^File file (.listFiles dir)]
-      (when-not (or (.isDirectory file) (re-matches ignore-files-re (.getName file)))
-        (println "File system deployer now bootstrapping module" file)
-        (future (try
-                  (handle-event manager dir :create (.getAbsoluteFile file))
-                  (catch Exception ex
-                    (.printStackTrace ex)))))))
+    (doseq [^File file (.listFiles dir)
+            :let [name (.getName file)]
+            :when (re-matches descriptor-files-re name)]
+      (try
+        (info logger "Filesystem deployer now bootstrapping module" (str file))
+        (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
+              command-logger (logging/stdout-command-logger logger "bootstrap")]
+          (modules/activate! manager name descriptor command-logger))
+        (catch Exception ex
+          (error logger "Could not activate" name "-" ex)))))
 
   Stoppable
   (stop [_]
-    (println "Stopping filesystem deployment watcher...")
-    (close watcher)
-    (unregister-notifier! manager "fs-deployer")
-    (println "Filesystem deployment watcher stopped.")))
+    (info logger "Stopping filesystem deployment watcher...")
+    (async/close! module-event-tap)
+    (watcher/close watcher)
+    (info logger "Filesystem deployment watcher stopped.")))
 
 
 (def directory
   (reify Startable
     (start [_ systems]
-      (let [config (get-config (require-system Config systems) :fs)
-            manager (require-system Manager systems)]
-        (println "Starting filesystem deployment watcher, using config" config "...")
+      (let [config (config/get-config (require-system Config systems) :fs)
+            manager (require-system Manager systems)
+            logger (require-system SystemLogger systems)]
+        (info logger "Starting filesystem deployer, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
         (let [dir (file (:deployments config))]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
-          (register-notifier! manager "fs-deployer" (partial handle-notification dir))
-          (let [watcher (-> (mk-watchservice (partial handle-event manager dir))
-                            (watch dir))]
-            (println "Filesystem deployment watcher started.")
-            (DirectoryDeployer. manager dir watcher)))))))
+          (let [watcher (-> (partial fs-event-handler manager logger dir)
+                            (watcher/mk-watchservice logger)
+                            (watcher/watch dir))
+                module-event-tap (async/tap (modules/event-mult manager) (module-event-loop dir))]
+            (info logger "Filesystem deployment watcher started.")
+            (DirectoryDeployer. manager logger dir watcher module-event-tap)))))))
