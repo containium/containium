@@ -7,8 +7,8 @@
             [containium.systems :refer (with-systems)]
             [containium.systems.config :as config]
             [containium.systems.cassandra :as api]
-            [containium.systems.cassandra.embedded12 :as embedded]
-            [containium.systems.cassandra.alia1 :as alia]
+            [containium.systems.cassandra.embedded :as embedded]
+            [containium.systems.cassandra.alia :as alia]
             [containium.systems.logging :as logging])
   (:import [java.math BigInteger BigDecimal]
            [java.net InetAddress]
@@ -28,11 +28,11 @@
 (deftest types
   ;; Open both an embedded Cassandra instance, and an Alia instance connecting to the
   ;; embedded instance.
-  (with-systems sys [:config (config/map-config {:cassandra {:config-file "cassandra.yaml"}
+  (with-systems sys [:config (config/map-config {:cassandra {:config-file "cassandra-test.yaml"}
                                                  :alia {:contact-points ["localhost"]}})
                      :logging logging/logger
-                     :embedded embedded/embedded12
-                     :alia (alia/alia1 :alia)]
+                     :embedded embedded/embedded
+                     :alia (alia/alia :alia)]
     (let [embedded (:embedded sys)
           alia (:alia sys)]
 

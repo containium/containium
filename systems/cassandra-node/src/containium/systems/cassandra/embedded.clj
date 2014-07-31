@@ -2,19 +2,20 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.systems.cassandra.embedded12
-  "The embedded Cassandra 1.2 implementation."
+(ns containium.systems.cassandra.embedded
+  "The embedded Cassandra 2.0 implementation."
   (:require [containium.systems :refer (Startable Stoppable require-system)]
             [containium.systems.cassandra :refer (Cassandra cql-statements)]
+            [containium.systems.cassandra.config :as cconf]
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import [org.apache.cassandra.cql3 QueryProcessor ResultSet ColumnSpecification
-            UntypedResultSet]
+            UntypedResultSet QueryOptions]
            [org.apache.cassandra.db ConsistencyLevel]
            [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DateType DecimalType
             DoubleType EmptyType FloatType InetAddressType Int32Type IntegerType ListType LongType
             MapType SetType UTF8Type UUIDType]
-           [org.apache.cassandra.service CassandraDaemon ClientState QueryState]
+           [org.apache.cassandra.service CassandraDaemon QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [java.util List Map Set UUID Date]
            [java.net InetAddress]
@@ -146,18 +147,17 @@
 
 (defn- prepare*
   [{:keys [client-state]} query]
-  (-> query
-      (QueryProcessor/prepare client-state false)
-      .statementId
-      QueryProcessor/getPrepared))
+  (let [result (QueryProcessor/prepare query client-state false)
+        id (.statementId result)]
+    (.getPrepared QueryProcessor/instance id)))
 
 
 (defn- do-prepared*
   [{:keys [query-state]} statement opts values]
   (let [consistency (kw->consistency (get opts :consistency *consistency*))
         _ (assert consistency "Missing :consistency and *consistency* not bound.")
-        result (QueryProcessor/processPrepared statement consistency query-state
-                                               (map encode-value values))]
+        options (QueryOptions. consistency (map encode-value values))
+        result (.processPrepared QueryProcessor/instance statement query-state options)]
     (when (instance? ResultMessage$Rows result)
       (if (:raw? opts)
         (UntypedResultSet. (.result ^ResultMessage$Rows result))
@@ -179,8 +179,7 @@
     (do-prepared* record ps {:consistency :one, :raw? true} nil)))
 
 
-(defrecord EmbeddedCassandra12 [^CassandraDaemon daemon ^Thread thread client-state query-state
-                                logger]
+(defrecord EmbeddedCassandra [^CassandraDaemon daemon ^Thread thread client-state query-state logger]
   Cassandra
   (prepare [this query]
     (prepare* this query))
@@ -201,8 +200,9 @@
     (has-keyspace* this name))
 
   (keyspaced [this name]
-    (let [keyspaced-state (doto (ClientState. true) (.setKeyspace name))]
-      (EmbeddedCassandra12. nil nil keyspaced-state (QueryState. keyspaced-state) logger)))
+    (let [keyspaced-state (doto (eval '(org.apache.cassandra.service.ClientState/forInternalCalls))
+                            (.setKeyspace name))]
+      (EmbeddedCassandra. nil nil keyspaced-state (QueryState. keyspaced-state) logger)))
 
   (write-schema [this schema-str]
     (write-schema* this schema-str))
@@ -219,21 +219,24 @@
       (warn logger "Cannot call stop on a keyspaced instance."))))
 
 
-(def embedded12
+(def embedded
   (reify Startable
     (start [_ systems]
       (let [config (get-config (require-system Config systems) :cassandra)
             logger (require-system SystemLogger systems)]
         (info logger "Starting embedded Cassandra, using config" config "...")
-        (System/setProperty "cassandra.config" (:config-file config))
+        (System/setProperty "cassandra.start_rpc" "false")
         (System/setProperty "cassandra-foreground" "false")
-        (let [daemon (CassandraDaemon.)
-              thread (Thread. #(.activate daemon))
-              client-state (ClientState. true)
-              query-state (QueryState. client-state)]
-          (.setDaemon thread true)
-          (.start thread)
-          (info logger "Waiting for Cassandra to be fully started...")
-          (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
-          (info logger "Cassandra fully started.")
-          (EmbeddedCassandra12. daemon thread client-state query-state logger))))))
+        (System/setProperty "cassandra.config.loader" "containium.systems.cassandra.config")
+        (binding [cconf/*system-config* config
+                  cconf/*logger* logger]
+          (let [daemon (CassandraDaemon.)
+                thread (Thread. #(.activate daemon))
+                client-state (eval '(org.apache.cassandra.service.ClientState/forInternalCalls))
+                query-state (QueryState. client-state)]
+            (.setDaemon thread true)
+            (.start thread)
+            (info logger "Waiting for Cassandra to be fully started...")
+            (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
+            (info logger "Cassandra fully started.")
+            (EmbeddedCassandra. daemon thread client-state query-state logger)))))))

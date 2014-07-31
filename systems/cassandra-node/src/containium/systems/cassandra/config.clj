@@ -61,10 +61,10 @@
 (defn -loadConfig
   [this]
   (info *logger* "Constructing Cassandra config from: " (pr-str *system-config*))
-  (let [config (if-let [url (:default-yaml *system-config*)]
+  (let [config (if-let [url (:config-file *system-config*)]
                  (do (System/setProperty "cassandra.config" url)
                      (.superLoadConfig this))
                  (Config.))]
-    (doseq [[k v] (dissoc *system-config* :default-yaml)]
+    (doseq [[k v] (dissoc *system-config* :config-file)]
       (override config (munge k) v))
     config))

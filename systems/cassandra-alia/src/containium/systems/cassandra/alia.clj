@@ -2,8 +2,8 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(ns containium.systems.cassandra.alia1
-  "The Alia 1 implementation of the Cassandra system."
+(ns containium.systems.cassandra.alia
+  "The Alia 2 implementation of the Cassandra system."
   (:require [qbits.alia :as alia]
             [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :as config :refer (Config)]
@@ -26,7 +26,7 @@
   [{:keys [session]} statement opts values]
   (let [args (merge {:consistency *consistency*, :keywordize? *keywordize*} opts {:values values})]
     (assert (:consistency opts) "Missing :consistency key and *consistency* not bound.")
-    (apply alia/execute session statement (interleave (keys args) (vals args)))))
+    (alia/execute session statement args)))
 
 
 (defn- has-keyspace*
@@ -42,7 +42,7 @@
     (do-prepared* record ps {:consistency :one} nil)))
 
 
-(defrecord Alia1 [cluster session logger]
+(defrecord AliaCassandra [cluster session logger]
   Cassandra
   (prepare [this query-str]
     (prepare* this query-str))
@@ -63,30 +63,28 @@
     (has-keyspace* this name))
 
   (keyspaced [this name]
-    (Alia1. cluster (alia/connect cluster name) logger))
+    (AliaCassandra. cluster (alia/connect cluster name) logger))
 
   (write-schema [this schema-str]
     (write-schema* this schema-str))
 
   Stoppable
   (stop [this]
-    (info logger "Stopping Alia 1 system...")
+    (info logger "Stopping Alia 2 system...")
     (alia/shutdown cluster)
-    (info logger "Alia 1 system stopped.")))
+    (info logger "Alia 2 system stopped.")))
 
 
-(defn alia1
-  "Create a new Alia 1 Startable, using the specified key to lookup
-  the connection details in the Config system."
+(defn alia
+  "Create a new AliaCassandra Startable, using the specified key to
+  lookup the connection details in the Config system."
   [config-key]
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) config-key)
             logger (require-system SystemLogger systems)
-            _ (info logger "Starting Alia 1 system, using config:" config)
-            cluster (apply alia/cluster
-                           (:contact-points config)
-                           (interleave (keys config) (vals config)))
+            _ (info logger "Starting Alia 2 system, using config:" config)
+            cluster (alia/cluster config)
             session (alia/connect cluster)]
-        (info logger "Alia 1 system started.")
-        (Alia1. cluster session logger)))))
+        (info logger "Alia 2 system started.")
+        (AliaCassandra. cluster session logger)))))

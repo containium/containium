@@ -16,7 +16,7 @@
           :ssl-port 8443
           :keystore "dev-resources/dev_keystore.jks"
           :key-password "whoopwhoop"}
- :cassandra {:default-yaml "cassandra20.yaml"
+ :cassandra {:config-file "cassandra-test.yaml"
              :listen-address "localhost"}
  :alia {:contact-points ["localhost"]
         :port 9042}
@@ -43,7 +43,7 @@
                       "dynapath.*"
                       "simple_time.*"
                       "postal.*"
-                      "clj-http.*"
+                      "clj_http.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
@@ -65,6 +65,8 @@
                       "potemkin.*"
                       "flatland.*"
                       "useful.*"
+                      "clj_tuple.*"
+                      "riddley\\.(?!Util).*"
                       ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
                       ;; Keep this in mind when seeking leaks. :)
                       ;;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"

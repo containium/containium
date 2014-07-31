@@ -4,7 +4,7 @@
 
 (ns containium.core
   (:require [containium.systems :refer (with-systems)]
-            [containium.systems.cassandra.embedded20 :as cassandra]
+            [containium.systems.cassandra.embedded :as cassandra]
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
@@ -136,7 +136,7 @@
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                               :logging logging/logger
                               :mail mail/postal
-                              :cassandra cassandra/embedded20
+                              :cassandra cassandra/embedded
                               :elastic elastic/embedded
                               :kafka kafka/embedded
                               :session-store cass-session/default
