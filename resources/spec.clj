@@ -16,7 +16,7 @@
           :ssl-port 8443
           :keystore "dev-resources/dev_keystore.jks"
           :key-password "whoopwhoop"}
- :cassandra {:config-file "cassandra.yaml"
+ :cassandra {:default-yaml "cassandra20.yaml"
              :listen-address "localhost"}
  :alia {:contact-points ["localhost"]
         :port 9042}

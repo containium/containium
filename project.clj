@@ -14,7 +14,7 @@
                  [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
-                 [org.apache.cassandra/cassandra-all "2.0.0"
+                 [org.apache.cassandra/cassandra-all "2.0.9"
                   :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml]]
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.0-M4"]
@@ -27,7 +27,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.6.1"]
-                 [cc.qbits/alia "1.9.2"]
+                 [cc.qbits/alia "2.0.0-rc4"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.1.1"]
                  [clojurewerkz/elastisch "2.0.0"]
@@ -82,7 +82,9 @@
                                            ;; Include the namespaces here that you want to skip compiling
                                            ;; altogether. Start the namespaces with a bang. For example:
                                            ;; [:namespace "!some.namespace.to.ignore"]
-                                           [:namespace "!containium.systems.ring.netty"]])
+                                           [:namespace "!containium.systems.ring.netty"]
+                                           [:namespace "!containium.systems.cassandra.embedded12"]
+                                           [:namespace "!containium.systems.cassandra.alia1"]])
                   :executions ([:execution
                                 [:id "compile-clojure"]
                                 [:phase "compile"]
@@ -107,4 +109,4 @@
                                   [:manifestEntries [:Containium-Version "${buildNumber}"]]]}]]
   :pom-addition [:properties [:project.build.sourceEncoding "UTF-8"]]
   :aliases {"launch" ["with-profile" "+aot" "run"]}
-))
+)

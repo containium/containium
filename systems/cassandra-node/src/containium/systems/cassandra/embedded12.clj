@@ -144,15 +144,12 @@
 (def ^:dynamic *keywordize* false)
 
 
-(defn- prepare**
+(defn- prepare*
   [{:keys [client-state]} query]
   (-> query
       (QueryProcessor/prepare client-state false)
       .statementId
       QueryProcessor/getPrepared))
-
-
-(def prepare* (memoize prepare**))
 
 
 (defn- do-prepared*
