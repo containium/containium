@@ -7,7 +7,7 @@
             [containium.systems.config :refer (map-config)]
             [containium.systems.repl :as repl]
             [containium.systems.elasticsearch :as elastic]
-            [containium.systems.cassandra.embedded12 :as cassandra]
+            [containium.systems.cassandra.embedded :as cassandra]
             [containium.systems.ring.http-kit :refer (test-http-kit)]
             [ring.middleware.session.memory :refer (memory-store)]
             [clojure.java.io :as io]))
@@ -23,7 +23,7 @@
                          :session-store (memory-store)
                          :ring (test-http-kit (-> ring :handler))
                          :elastic elastic/embedded
-                         :cassandra cassandra/embedded12]
+                         :cassandra cassandra/embedded]
     (start systems
            {:file (io/as-file ".")
             :profiles profiles
