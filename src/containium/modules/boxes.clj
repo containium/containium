@@ -39,6 +39,19 @@
        (remove nil?)))
 
 
+(defn- report-non-isolates
+  [boxure-config logging]
+  (let [isolated-re (->> (conj (:isolates boxure-config) boxure.BoxureClassLoader/ISOLATE)
+                         (interpose "|")
+                         (apply str)
+                         (re-pattern))
+        loaded (map str (all-ns))
+        not-isolated (remove (comp (partial re-matches isolated-re) str) loaded)]
+    (when (seq not-isolated)
+      (warn logging "Some loaded namespaces are not isolated:"
+            (apply str (interpose ", " not-isolated))))))
+
+
 (defn start-box
   "The logic for starting a box. Returns the started box."
   [{:keys [name file] :as descriptor} boxure-config {:keys [logging] :as systems} command-logger]
@@ -52,6 +65,7 @@
               boxure-config (if-let [module-isolates (:isolates module-config)]
                               (update-in boxure-config [:isolates] (partial apply conj) module-isolates)
                               #_else boxure-config)
+              _ (report-non-isolates boxure-config logging)
               box-debug (System/getenv "BOXDEBUG")
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
               injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
