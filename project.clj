@@ -27,7 +27,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.6.1"]
-                 [cc.qbits/alia "2.0.0-rc4"]
+                 [cc.qbits/alia "2.1.0-rc1"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.1.1"]
                  [clojurewerkz/elastisch "2.0.0"]
