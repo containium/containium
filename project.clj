@@ -37,8 +37,7 @@
                  [com.taoensso/timbre "3.2.1"]
                  [myguidingstar/clansi "1.3.0"]
                  [lein-light-nrepl "0.0.18"]]
-  :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
-             :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
+  :profiles {:doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
              :aot {:aot [containium.core]}}
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
