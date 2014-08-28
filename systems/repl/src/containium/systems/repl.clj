@@ -8,7 +8,8 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.logging :as logging
              :refer (SystemLogger refer-logging refer-command-logging)]
-            [clojure.tools.nrepl.server :as nrepl]))
+            [clojure.tools.nrepl.server :as nrepl]
+            [lighttable.nrepl.handler :as lt]))
 (refer-logging)
 (refer-command-logging)
 
@@ -26,19 +27,24 @@
 
 ;;; The nREPL implementation.
 
+(def middlewares [#'lt/lighttable-ops])
+
 (defrecord NREPL [server logger]
   REPL
   (open-repl [_ command-logger]
     (if @server
       (error-command command-logger "An nREPL server is already running, on port" (:port @server))
-      (do (reset! server (nrepl/start-server))
-          (info-all command-logger "nREPL server started on port" (:port @server)))))
+      (do (reset! server (nrepl/start-server :handler (apply nrepl/default-handler middlewares)))
+          (info-all command-logger "nREPL server started on port" (:port @server)
+                    "with middlewares" middlewares))))
 
   (open-repl [_ command-logger port]
     (if @server
       (error-command command-logger "An nREPL server is already running, on port" (:port @server))
-      (do (reset! server (nrepl/start-server :port port))
-          (info-all command-logger "nREPL server started on port" port))))
+      (do (reset! server (nrepl/start-server :port port
+                                             :handler (apply nrepl/default-handler middlewares)))
+          (info-all command-logger "nREPL server started on port" port
+                    "with middlewares" middlewares))))
 
   (close-repl [_ command-logger]
     (if @server

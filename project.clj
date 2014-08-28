@@ -9,7 +9,7 @@
             :url "http://mozilla.org/MPL/2.0/"}
   :dependencies [[boxure/clojure "1.5.1"]
                  [boxure "0.1.0-SNAPSHOT"]
-                 [org.clojure/tools.nrepl "0.2.3"]
+                 [org.clojure/tools.nrepl "0.2.4"]
                  [jline "2.11"]
                  [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
@@ -35,7 +35,8 @@
                  [com.maitria/packthread "0.1.1"]
                  [com.draines/postal "1.11.1"]
                  [com.taoensso/timbre "3.2.1"]
-                 [myguidingstar/clansi "1.3.0"]]
+                 [myguidingstar/clansi "1.3.0"]
+                 [lein-light-nrepl "0.0.18"]]
   :profiles {:test {:dependencies [[cc.qbits/alia "1.9.2"]]}
              :doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
              :aot {:aot [containium.core]}}
