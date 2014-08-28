@@ -67,6 +67,8 @@
                       ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
                       ;; Keep this in mind when seeking leaks. :)
                       ;;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
+                      ;; lighttable-nrepl deps
+                      "clj_stacktrace.*"
                       ]}
  :repl {:port 13337}
  :fs {:deployments "deployments"}
