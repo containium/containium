@@ -69,6 +69,7 @@
                       ;;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
                       ;; lighttable-nrepl deps
                       "clj_stacktrace.*"
+                      "fs.*"
                       ]}
  :repl {:port 13337}
  :fs {:deployments "deployments"}

@@ -109,8 +109,7 @@
 
 (defn- new-agent
   [{:keys [agents systems] :as manager} name]
-  (let [ring-name (str (gensym (str name " (")) ")")
-        agent (agent (Module. name :undeployed nil nil ring-name false)
+  (let [agent (agent (Module. name :undeployed nil nil name false)
                      :error-handler (partial agent-error-handler (:logging systems)))]
     (swap! agents assoc name agent)
     agent))
@@ -151,27 +150,28 @@
 
 
 (defn- do-deploy
-  [{:keys [name ring-name descriptor error] :as module} {:keys [systems] :as manager} command-logger
+  [{:keys [name descriptor error] :as module} {:keys [systems] :as manager} command-logger
    new-descriptor]
   (if-not error
     (if-let [descriptor (or new-descriptor descriptor)]
-      (try
-        (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
-              boxure-config (-> (get-config (-> manager :systems :config) :modules)
-                                (assoc :profiles profiles))]
-          ;; Try to start the box.
-          (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
-            (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))]
-              ;; Register it with ring, if applicable.
-              (when (-> box :project :containium :ring)
-                (upstart-box (-> manager :systems :ring) ring-name box command-logger))
-              (info-all command-logger "Module" ring-name "successfully deployed.")
-              (assoc module :box box :descriptor descriptor :ring-name ring-name))
-            ;; else if box failed to start.
-            (throw (Exception. (str "Box " ring-name " failed to start.")))))
-        (catch Throwable ex
-          (error-all command-logger "Module" ring-name "failed to deploy:" (.getMessage ex))
-          (assoc module :error true :descriptor descriptor)))
+      (let [ring-name (str (gensym (str name " (")) ")")]
+        (try
+          (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
+                boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                                  (assoc :profiles profiles))]
+            ;; Try to start the box.
+            (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
+              (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))]
+                ;; Register it with ring, if applicable.
+                (when (-> box :project :containium :ring)
+                  (upstart-box (-> manager :systems :ring) ring-name box command-logger))
+                (info-all command-logger "Module" ring-name "successfully deployed.")
+                (assoc module :box box :descriptor descriptor :ring-name ring-name))
+              ;; else if box failed to start.
+              (throw (Exception. (str "Box " ring-name " failed to start.")))))
+          (catch Throwable ex
+            (error-all command-logger "Module" ring-name "failed to deploy:" (.getMessage ex))
+            (assoc module :error true :descriptor descriptor))))
       (do (error-command command-logger "Module" name
                          "is new to containium, initial descriptor required.")
           (assoc module :error true)))
