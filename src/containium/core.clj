@@ -11,7 +11,7 @@
             [containium.systems.ring.http-kit :as http-kit]
             [containium.systems.ring.jetty9 :as jetty9]
             [containium.systems.ring-session-cassandra :as cass-session]
-            [containium.deployer :as deployer]
+            [containium.deployer :as deployer :refer (Deployer)]
             [containium.deployer.socket :as socket]
             [containium.systems.config :as config]
             [containium.modules :as modules]
@@ -24,7 +24,8 @@
             [clojure.java.io :refer (resource as-file)]
             [clojure.tools.nrepl.server :as nrepl])
   (:import [jline.console ConsoleReader]
-           [java.util Timer TimerTask])
+           [java.util Timer TimerTask]
+           [java.util.concurrent CountDownLatch ])
   (:gen-class))
 (refer-logging)
 
@@ -98,13 +99,21 @@
 
 ;;; Daemon control
 
-(def ^java.util.concurrent.CountDownLatch daemon-latch (java.util.concurrent.CountDownLatch. 1))
+(def ^CountDownLatch daemon-latch (CountDownLatch. 1))
 (defn shutdown []
   (println "Received kill.")
   (.countDown daemon-latch)
   (Thread/sleep 1337))
 
 ;;; The coordinating functions.
+
+(defn bootstrap-modules
+  "Calls `bootstrap-modules` on every Deployer system."
+  [systems]
+  (let [deployers (filter #(satisfies? Deployer %) (vals systems))
+        latch (CountDownLatch. (count deployers))]
+    (doseq [deployer deployers]
+      (deployer/bootstrap-modules deployer latch))))
 
 (defn run
   "This function is used for the with-systems function. It is called
@@ -113,7 +122,7 @@
   loop exited."
   [sys]
   (alter-var-root #'systems (constantly sys))
-  (deployer/bootstrap-modules (:fs sys))
+  (bootstrap-modules sys)
   (command-loop sys))
 
 (defn run-daemon
@@ -122,7 +131,7 @@
   (.addShutdownHook (java.lang.Runtime/getRuntime) (Thread. ^Runnable shutdown))
   (println "Waiting for the kill.")
   (alter-var-root #'systems (constantly sys))
-  (deployer/bootstrap-modules (:fs sys))
+  (bootstrap-modules sys)
   (.await daemon-latch))
 
 
