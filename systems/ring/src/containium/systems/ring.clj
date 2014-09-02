@@ -10,7 +10,8 @@
             [containium.systems.ring-analytics :refer (wrap-ring-analytics)]
             [containium.systems.logging :as logging :refer (refer-command-logging)]
             [boxure.core :as boxure]
-            [packthread.core :refer (+>)]))
+            [packthread.core :refer (+>)]
+            [prone.middleware :refer (wrap-exceptions)]))
 (refer-command-logging)
 
 
@@ -56,18 +57,6 @@
   (let [sorted (->> apps (sort-by #(get % :sort-value)) reverse)]
     (debug-command command-logger (apply str "Sorted apps: " (interpose ", " (map :name apps))))
     sorted))
-
-
-(defn- wrap-try-catch
-  [handler]
-  (fn [request]
-    (try
-      (handler request)
-      (catch Throwable t
-        (ex/exit-when-fatal t)
-        (println "Error handling request:" request)
-        (.printStackTrace t)
-        {:status 500 :body "Internal error."}))))
 
 
 (defn- wrap-trim-context
@@ -125,7 +114,7 @@
                       (or (all-handlers request)
                           (miss-handler request))))
                   (constantly {:status 503 :body "no apps loaded"}))]
-    (wrap-try-catch handler)))
+    (wrap-exceptions handler)))
 
 
 (defn clean-ring-conf

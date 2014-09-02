@@ -70,6 +70,13 @@
                       ;; lighttable-nrepl deps
                       "clj_stacktrace.*"
                       "fs.*"
+                      ;; Prone deps
+                      "prone.*"
+                      "flare.*"
+                      "hiccup_find.*"
+                      "cljs.*"
+                      "schema.*"
+                      "quiescent.*"
                       ]}
  :repl {:port 13337}
  :fs {:deployments "deployments"}
