@@ -228,15 +228,15 @@
         (System/setProperty "cassandra.start_rpc" "false")
         (System/setProperty "cassandra-foreground" "false")
         (System/setProperty "cassandra.config.loader" "containium.systems.cassandra.config")
-        (with-redefs [cconf/*system-config* config
-                      cconf/*logger* logger]
-          (let [daemon (CassandraDaemon.)
-                thread (Thread. #(.activate daemon))
-                client-state (eval '(org.apache.cassandra.service.ClientState/forInternalCalls))
-                query-state (QueryState. client-state)]
-            (.setDaemon thread true)
-            (.start thread)
-            (info logger "Waiting for Cassandra to be fully started...")
-            (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
-            (info logger "Cassandra fully started.")
-            (EmbeddedCassandra. daemon thread client-state query-state logger)))))))
+        (deliver cconf/system-config config)
+        (deliver cconf/logger logger)
+        (let [daemon (CassandraDaemon.)
+              thread (Thread. #(.activate daemon))
+              client-state (eval '(org.apache.cassandra.service.ClientState/forInternalCalls))
+              query-state (QueryState. client-state)]
+          (.setDaemon thread true)
+          (.start thread)
+          (info logger "Waiting for Cassandra to be fully started...")
+          (while (not (some-> daemon .nativeServer .isRunning)) (Thread/sleep 200))
+          (info logger "Cassandra fully started.")
+          (EmbeddedCassandra. daemon thread client-state query-state logger))))))

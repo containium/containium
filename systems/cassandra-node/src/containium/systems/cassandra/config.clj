@@ -15,8 +15,8 @@
 (refer-logging)
 
 
-(def ^:dynamic *system-config* nil)
-(def ^:dynamic *logger* nil)
+(defonce system-config (promise))
+(defonce logger (promise))
 
 (defn munge
   [key]
@@ -62,10 +62,14 @@
 
 (defn -loadConfig
   [this]
-  (info *logger* "Constructing Cassandra config from:" (pr-str *system-config*))
-  (let [config (if-let [url (:config-file *system-config*)]
+  (assert (realized? logger)
+          "Logger not realized; config loaded before containium was able to set it.")
+  (assert (realized? system-config)
+          "Configuration not realized; config loaded before containium was able to set it.")
+  (info @logger "Constructing Cassandra config from:" (pr-str @system-config))
+  (let [config (if-let [url (:config-file @system-config)]
                  (.superLoadConfig this ^URL (io/resource url))
                  (Config.))]
-    (doseq [[k v] (dissoc *system-config* :config-file)]
+    (doseq [[k v] (dissoc @system-config :config-file)]
       (override config (munge k) v))
     config))

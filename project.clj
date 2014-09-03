@@ -93,8 +93,7 @@
                                   ;; Include the namespaces here that need to be AOT compiled for
                                   ;; inclusion in the JAR here. For example:
                                   ;; [:namespace "prime.types.cassandra-repository"]
-                                  [:namespace "containium.systems.cassandra.config"]
-                                  [:namespace "containium.systems.cassandra.alia"]]]
+                                  [:namespace "containium.systems.cassandra.config"]]]
                                 [:goals [:goal "compile"]]]
                                [:execution
                                 [:id "non-aot-compile"]
