@@ -116,4 +116,5 @@
                                   [:manifestEntries [:Containium-Version "${buildNumber}"]]]}]]
   :pom-addition [:properties [:project.build.sourceEncoding "UTF-8"]]
   :aliases {"launch" ["with-profile" "+aot" "run"]}
-)
+
+  :java-agents [[com.github.jbellis/jamm "0.2.6"]])
