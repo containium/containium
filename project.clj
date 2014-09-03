@@ -16,7 +16,7 @@
                  [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
-                 [org.apache.cassandra/cassandra-all "2.0.9"
+                 [org.apache.cassandra/cassandra-all "2.0.10"
                   :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml]]
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.0-M4"]
@@ -29,7 +29,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.6.1"]
-                 [cc.qbits/alia "2.1.0-rc1"]
+                 [cc.qbits/alia "2.1.2"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.1.1"]
                  [clojurewerkz/elastisch "2.0.0"]
@@ -93,7 +93,8 @@
                                   ;; Include the namespaces here that need to be AOT compiled for
                                   ;; inclusion in the JAR here. For example:
                                   ;; [:namespace "prime.types.cassandra-repository"]
-                                  [:namespace "containium.systems.cassandra.config"]]]
+                                  [:namespace "containium.systems.cassandra.config"]
+                                  [:namespace "containium.systems.cassandra.alia"]]]
                                 [:goals [:goal "compile"]]]
                                [:execution
                                 [:id "non-aot-compile"]
