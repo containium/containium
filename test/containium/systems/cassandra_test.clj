@@ -94,4 +94,4 @@
           (is (instances? java.lang.Boolean (:bo embed-result) (:bo alia-result)))
           (is (instances? java.util.Date (:ti embed-result) (:ti alia-result)))
           (is (instances? java.lang.String (:te embed-result) (:te alia-result)))
-          (is (instances? clojure.lang.IteratorSeq (:li embed-result) (:li alia-result))))))))
+          (is (instances? clojure.lang.PersistentVector (:li embed-result) (:li alia-result))))))))

@@ -48,7 +48,7 @@
   (condp instance? v
     Map  (into  {} v)
     Set  (into #{} v)
-    List (seq v)
+    List (into  [] v)
     v))
 
 
