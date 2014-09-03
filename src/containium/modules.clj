@@ -109,7 +109,7 @@
 
 (defn- new-agent
   [{:keys [agents systems] :as manager} name]
-  (let [agent (agent (Module. name :undeployed nil nil nil false)
+  (let [agent (agent (Module. name :undeployed nil nil name false)
                      :error-handler (partial agent-error-handler (:logging systems)))]
     (swap! agents assoc name agent)
     agent))
@@ -134,9 +134,9 @@
 (defn- update-status
   ([module manager command-logger success-state]
      (update-status module manager command-logger success-state nil))
-  ([{:keys [name error] :as module} manager command-logger success-state error-state]
+  ([{:keys [name ring-name error] :as module} manager command-logger success-state error-state]
      (let [status (if error error-state success-state)]
-       (info-all command-logger "Module" name "status has changed to" (clojure.core/name status))
+       (info-all command-logger "Module" ring-name "status has changed to" (clojure.core/name status))
        (fire-event manager :status name status)
        (assoc module :status status))))
 
@@ -154,24 +154,24 @@
    new-descriptor]
   (if-not error
     (if-let [descriptor (or new-descriptor descriptor)]
-      (try
-        (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
-              boxure-config (-> (get-config (-> manager :systems :config) :modules)
-                                (assoc :profiles profiles))]
-          ;; Try to start the box.
-          (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
-            (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))
-                  ring-name (gensym name)]
-              ;; Register it with ring, if applicable.
-              (when (-> box :project :containium :ring)
-                (upstart-box (-> manager :systems :ring) ring-name box command-logger))
-              (info-all command-logger "Module" name "successfully deployed.")
-              (assoc module :box box :descriptor descriptor :ring-name ring-name))
-            ;; else if box failed to start.
-            (throw (Exception. (str "Box " name " failed to start.")))))
-        (catch Throwable ex
-          (error-all command-logger "Module" name "failed to deploy:" (.getMessage ex))
-          (assoc module :error true :descriptor descriptor)))
+      (let [ring-name (str (gensym (str name " (")) ")")]
+        (try
+          (let [{:keys [containium profiles] :as descriptor} (clean-descriptor descriptor name)
+                boxure-config (-> (get-config (-> manager :systems :config) :modules)
+                                  (assoc :profiles profiles))]
+            ;; Try to start the box.
+            (if-let [box (start-box descriptor boxure-config (:systems manager) command-logger)]
+              (let [box (assoc-in box [:project :containium] (-> box :descriptor :containium))]
+                ;; Register it with ring, if applicable.
+                (when (-> box :project :containium :ring)
+                  (upstart-box (-> manager :systems :ring) ring-name box command-logger))
+                (info-all command-logger "Module" ring-name "successfully deployed.")
+                (assoc module :box box :descriptor descriptor :ring-name ring-name))
+              ;; else if box failed to start.
+              (throw (Exception. (str "Box " ring-name " failed to start.")))))
+          (catch Throwable ex
+            (error-all command-logger "Module" ring-name "failed to deploy:" (.getMessage ex))
+            (assoc module :error true :descriptor descriptor))))
       (do (error-command command-logger "Module" name
                          "is new to containium, initial descriptor required.")
           (assoc module :error true)))
@@ -187,9 +187,9 @@
                  (remove-box (-> manager :systems :ring) (or (:ring-name old) ring-name)
                              command-logger))
                (stop-box name (or (:box old) box) command-logger (:systems manager)))
-         (do (info-all command-logger "Module" name "successfully undeployed.")
+         (do (info-all command-logger "Module" ring-name "successfully undeployed.")
              (if old module (dissoc module :box)))
-         (do (error-all command-logger "Module" name "failed to undeploy.")
+         (do (error-all command-logger "Module" ring-name "failed to undeploy.")
              (-> (if old module (dissoc module :box)) (assoc :error true))))
        module)))
 

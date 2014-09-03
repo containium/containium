@@ -18,7 +18,7 @@
            [org.jboss.netty.channel.socket.nio NioServerSocketChannelFactory]
            [org.jboss.netty.bootstrap ServerBootstrap]
            [org.jboss.netty.handler.codec.string StringDecoder StringEncoder]
-           [java.util.concurrent Executors]
+           [java.util.concurrent Executors CountDownLatch]
            [java.net InetSocketAddress]
            [containium.modules Response]))
 (refer-logging)
@@ -28,7 +28,7 @@
 ;;; The message handler for Netty server.
 
 (defn handler
-  [systems logger ^ChannelGroup channels]
+  [systems logger ^ChannelGroup channels ^CountDownLatch bootstrapped]
   (let [show-ex (atom true)]
     (proxy [SimpleChannelHandler] []
       (channelOpen [^ChannelHandlerContext ctx ^ChannelStateEvent evt]
@@ -44,6 +44,9 @@
                                  (.addListener ChannelFutureListener/CLOSE)))
                   command-logger (logging/command-logger logger chan command close-fn)]
               (try
+                (when (not= 0 (.getCount bootstrapped))
+                  (info-command command-logger "Waiting for containium modules bootstrap to complete...")
+                  (.await bootstrapped))
                 (commands/handle-command command args systems command-logger)
                 (catch Throwable t
                   (ex/exit-when-fatal t)
@@ -77,9 +80,13 @@
 
 
 (defrecord SocketDeployer [^ChannelFactory server-factory ^Channel server-channel
-                           ^ChannelGroup channels config logger]
+                           ^ChannelGroup channels config logger ^CountDownLatch bootstrapped]
   Deployer
-  (bootstrap-modules [this])
+  (bootstrap-modules [this latch]
+    (.countDown ^CountDownLatch latch)
+    (future (.await ^CountDownLatch latch)
+            (info logger "Socket-based deployer now processing connections.")
+            (.countDown bootstrapped)))
 
   Stoppable
   (stop [_]
@@ -118,8 +125,9 @@
             logger (require-system SystemLogger systems)
             _ (info logger "Starting socket-based module deployer, using config:" config)
             channels (DefaultChannelGroup. "containium management")
-            handler (handler systems logger channels)
+            bootstrapped (CountDownLatch. 1)
+            handler (handler systems logger channels bootstrapped)
             {:keys [server-factory server-channel]} (netty-server (:port config) handler)]
         (extend-channel logger)
         (info logger "Socket-based module deployer started.")
-        (SocketDeployer. server-factory server-channel channels config logger)))))
+        (SocketDeployer. server-factory server-channel channels config logger bootstrapped)))))

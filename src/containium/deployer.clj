@@ -14,7 +14,8 @@
             [clojure.edn :as edn])
   (:import [containium.systems Startable Stoppable]
            [java.nio.file Path WatchService]
-           [java.io File]))
+           [java.io File FileFilter]
+           [java.util.concurrent CountDownLatch]))
 (refer-logging)
 (refer-command-logging)
 
@@ -22,8 +23,11 @@
 ;;; Public API for Deployer systems.
 
 (defprotocol Deployer
-  (bootstrap-modules [this]
-    "Deploys all modules that should be started on Containium boot."))
+  (bootstrap-modules [this latch]
+    "Deploys all modules that should be started on Containium boot,
+    decreasing the given CountDownLatch by one when done. When the
+    latch reaches zero, all bootstraps are complete and one can start
+    accepting commands."))
 
 
 ;;; File system implementation.
@@ -34,7 +38,7 @@
 
 
 (defn- fs-event-handler
-  [manager logger dir kind ^Path path]
+  [manager logger dir ^CountDownLatch bootstrapped kind ^Path path]
   (let [filename (.. path getFileName toString)]
     (cond
      ;; Creation or touch of .activate file.
@@ -47,6 +51,9 @@
                (info logger "Activating" name "by filesystem event.")
                (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
                      command-logger (logging/stdout-command-logger logger "activate")]
+                 (when (not= 0 (.getCount bootstrapped))
+                   (info-all command-logger "Waiting for containium modules bootstrap to complete...")
+                   (.await bootstrapped))
                  (modules/activate! manager name descriptor command-logger))
                (catch Exception ex
                  (error logger "Could not activate" name "-" ex)))
@@ -55,7 +62,11 @@
      (and (= :delete kind) (re-matches descriptor-files-re filename))
      (try
        (info logger "Deactivating" filename "by filesystem event.")
-       (modules/deactivate! manager filename (logging/stdout-command-logger logger "deactivate"))
+       (let [command-logger (logging/stdout-command-logger logger "deactivate")]
+         (when (not= 0 (.getCount bootstrapped))
+           (info-all command-logger "Waiting for containium modules bootstrap to complete...")
+           (.await bootstrapped))
+         (modules/deactivate! manager filename command-logger))
        (catch Exception ex
          (error logger "Could not deactivate" filename "-" ex))))))
 
@@ -102,19 +113,33 @@
      chan))
 
 
-(defrecord DirectoryDeployer [manager logger ^File dir watcher module-event-tap]
+(defrecord DirectoryDeployer [manager logger ^File dir watcher module-event-tap
+                              ^CountDownLatch bootstrapped]
   Deployer
-  (bootstrap-modules [_]
-    (doseq [^File file (.listFiles dir)
-            :let [name (.getName file)]
-            :when (re-matches descriptor-files-re name)]
-      (try
-        (info logger "Filesystem deployer now bootstrapping module" (str file))
-        (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
-              command-logger (logging/stdout-command-logger logger "bootstrap")]
-          (modules/activate! manager name descriptor command-logger))
-        (catch Exception ex
-          (error logger "Could not activate" name "-" ex)))))
+  (bootstrap-modules [_ latch]
+    (let [files (.listFiles dir (reify FileFilter
+                                  (accept [this file]
+                                    (->> (.getName ^File file)
+                                         (re-matches descriptor-files-re)
+                                         (boolean)))))
+          completed (CountDownLatch. (count files))]
+      (doseq [^File file files
+              :let [name (.getName file)]]
+        (try
+          (info logger "Filesystem deployer now bootstrapping module" (str file))
+          (let [descriptor (-> (slurp file) (edn/read-string) (update-in [:file] as-file))
+                command-logger (logging/stdout-command-logger logger "bootstrap"
+                                                              (fn [_] (.countDown completed)))]
+            (modules/activate! manager name descriptor command-logger))
+          (catch Exception ex
+            (.countDown completed)
+            (error logger "Could not activate" name "-" ex))))
+      (future (.await completed)
+              (info logger "Filesystem deployer done with bootstrapping modules.")
+              (.countDown ^CountDownLatch latch)))
+    (future (.await latch)
+            (info logger "Filesystem deployer now processing file changes.")
+            (.countDown bootstrapped)))
 
   Stoppable
   (stop [_]
@@ -132,12 +157,13 @@
             logger (require-system SystemLogger systems)]
         (info logger "Starting filesystem deployer, using config" config "...")
         (assert (:deployments config) "Missing :deployments configuration for FS system.")
-        (let [dir (file (:deployments config))]
+        (let [dir (file (:deployments config))
+              bootstrapped (CountDownLatch. 1)]
           (assert (.exists dir) (str "The directory '" dir "' does not exist."))
           (assert (.isDirectory dir) (str "Path '" dir "' is not a directory."))
-          (let [watcher (-> (partial fs-event-handler manager logger dir)
+          (let [watcher (-> (partial fs-event-handler manager logger dir bootstrapped)
                             (watcher/mk-watchservice logger)
                             (watcher/watch dir))
                 module-event-tap (async/tap (modules/event-mult manager) (module-event-loop dir))]
             (info logger "Filesystem deployment watcher started.")
-            (DirectoryDeployer. manager logger dir watcher module-event-tap)))))))
+            (DirectoryDeployer. manager logger dir watcher module-event-tap bootstrapped)))))))
