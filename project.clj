@@ -81,20 +81,32 @@
                     containium.systems.ring]}
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
-                  :configuration ([:sourceDirectories [:sourceDirectory "src"]]
-                                    [:temporaryOutputDirectory "true"]
-                                      [:copyDeclaredNamespaceOnly "false"]
-                                        [:compileDeclaredNamespaceOnly "false"]
-                                          [:namespaces
-                                           ;; Include the namespaces here that you want to skip compiling
-                                           ;; altogether. Start the namespaces with a bang. For example:
-                                           ;; [:namespace "!some.namespace.to.ignore"]
-                                           [:namespace "!containium.systems.ring.netty"]
-                                           [:namespace "!containium.systems.cassandra.embedded12"]
-                                           [:namespace "!containium.systems.cassandra.alia1"]])
+                  :configuration ([:sourceDirectories [:sourceDirectory "src"]])
                   :executions ([:execution
-                                [:id "compile-clojure"]
+                                [:id "aot-compile"]
                                 [:phase "compile"]
+                                [:configuration
+                                 [:temporaryOutputDirectory "false"]
+                                 [:copyDeclaredNamespaceOnly "true"]
+                                 [:compileDeclaredNamespaceOnly "true"]
+                                 [:namespaces
+                                  ;; Include the namespaces here that need to be AOT compiled for
+                                  ;; inclusion in the JAR here. For example:
+                                  ;; [:namespace "prime.types.cassandra-repository"]
+                                  [:namespace "containium.systems.cassandra.config"]]]
+                                [:goals [:goal "compile"]]]
+                               [:execution
+                                [:id "non-aot-compile"]
+                                [:phase "compile"]
+                                [:configuration
+                                 [:temporaryOutputDirectory "true"]
+                                 [:copyDeclaredNamespaceOnly "false"]
+                                 [:compileDeclaredNamespaceOnly "false"]
+                                 [:namespaces
+                                  ;; Include the namespaces here that you want to skip compiling
+                                  ;; altogether. Start the namespaces with a bang. For example:
+                                  ;; [:namespace "!some.namespace.to.ignore"]
+                                  [:namespace "!containium.systems.ring.netty"]]]
                                 [:goals [:goal "compile"]]]
                                [:execution
                                 [:id "test-clojure"]
