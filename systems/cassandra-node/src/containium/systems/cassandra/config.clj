@@ -4,10 +4,12 @@
 
 (ns containium.systems.cassandra.config
   (:refer-clojure :exclude [munge])
-  (:require [containium.systems.logging :refer (refer-logging)])
+  (:require [containium.systems.logging :refer (refer-logging)]
+            [clojure.java.io :as io])
   (:import [org.apache.cassandra.config Config Config$CommitLogSync Config$DiskFailurePolicy
             SeedProviderDef]
-           [java.util LinkedHashMap])
+           [java.util LinkedHashMap]
+           [java.net URL])
   (:gen-class :extends org.apache.cassandra.config.YamlConfigurationLoader
               :exposes-methods {loadConfig superLoadConfig}))
 (refer-logging)
@@ -60,10 +62,9 @@
 
 (defn -loadConfig
   [this]
-  (info *logger* "Constructing Cassandra config from: " (pr-str *system-config*))
+  (info *logger* "Constructing Cassandra config from:" (pr-str *system-config*))
   (let [config (if-let [url (:config-file *system-config*)]
-                 (do (System/setProperty "cassandra.config" url)
-                     (.superLoadConfig this))
+                 (.superLoadConfig this ^URL (io/resource url))
                  (Config.))]
     (doseq [[k v] (dissoc *system-config* :config-file)]
       (override config (munge k) v))

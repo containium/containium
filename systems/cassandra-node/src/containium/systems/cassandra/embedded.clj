@@ -228,8 +228,8 @@
         (System/setProperty "cassandra.start_rpc" "false")
         (System/setProperty "cassandra-foreground" "false")
         (System/setProperty "cassandra.config.loader" "containium.systems.cassandra.config")
-        (binding [cconf/*system-config* config
-                  cconf/*logger* logger]
+        (with-redefs [cconf/*system-config* config
+                      cconf/*logger* logger]
           (let [daemon (CassandraDaemon.)
                 thread (Thread. #(.activate daemon))
                 client-state (eval '(org.apache.cassandra.service.ClientState/forInternalCalls))
