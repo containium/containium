@@ -20,8 +20,8 @@
                   :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml]]
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.0-M4"]
-                 [org.elasticsearch/elasticsearch "1.2.1"]
-                 [com.sonian/elasticsearch-zookeeper "1.2.0"]
+                 [org.elasticsearch/elasticsearch "1.2.3"]
+                 [com.sonian/elasticsearch-zookeeper "1.2.3"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.1.1"]
                  [com.taoensso/nippy "2.5.2"]
