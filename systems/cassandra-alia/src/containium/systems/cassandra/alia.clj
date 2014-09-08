@@ -24,7 +24,9 @@
 
 (defn- do-prepared*
   [{:keys [session]} statement opts values]
-  (let [args (merge {:consistency *consistency*, :keywordize? *keywordize*} opts {:values values})]
+  (let [args (merge {:consistency *consistency*, :string-keys? (not *keywordize*)}
+                    (when-let [keys? (:keywordize? opts)] {:string-keys? (not keys?)})
+                    opts {:values values})]
     (assert (:consistency opts) "Missing :consistency key and *consistency* not bound.")
     (alia/execute session statement args)))
 
