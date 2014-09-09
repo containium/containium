@@ -9,6 +9,7 @@
             [containium.systems.elasticsearch :as elastic]
             [containium.systems.cassandra.embedded :as cassandra]
             [containium.systems.ring.http-kit :refer (test-http-kit)]
+            [containium.systems.logging :as logging]
             [ring.middleware.session.memory :refer (memory-store)]
             [clojure.java.io :as io]))
 
@@ -19,6 +20,7 @@
                       :dev? true}
                  :as containium-map}]
   (with-systems systems [:config (map-config spec)
+                         :logging logging/logger
                          :repl repl/nrepl
                          :session-store (memory-store)
                          :ring (test-http-kit (-> ring :handler))
