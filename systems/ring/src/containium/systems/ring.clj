@@ -11,7 +11,8 @@
             [containium.systems.logging :as logging :refer (refer-command-logging)]
             [boxure.core :as boxure]
             [packthread.core :refer (+>)]
-            [prone.middleware :refer (wrap-exceptions)]))
+            [clojure.stacktrace :as stack])
+  (:import [java.util Date]))
 (refer-command-logging)
 
 
@@ -90,6 +91,26 @@
   (fn [request]
     (log-fn (str "[" app-name "]") request)
     (handler request)))
+
+
+(defn- wrap-exceptions
+  [handler]
+  (fn [request]
+    (try
+      (handler request)
+      (catch Throwable t
+        (ex/exit-when-fatal t)
+        (let [now (Date.)
+              msg (str "Error handling request at " (Date.) ":\n"
+                       request
+                       "\nCause by:\n"
+                       (with-out-str (stack/print-cause-trace t)))]
+          (.println (System/err) msg)
+          {:status 500
+           :body (str "<html><body>"
+                      "<h3>Internal server error. Please contact support.</h3>"
+                      "<span style=\"color: #777\">Server time: " now "</span>"
+                      "</body></html>")})))))
 
 
 (defn make-app
