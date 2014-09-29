@@ -76,7 +76,8 @@
 (defn send-html-message
   "Use this function to send a HTML mail with the Postal SMTP Mail
   system. It needs at least the mail system, the from address, the to
-  address, a subject, and the HTML string. The following options are also available:
+  address, a subject, and the HTML string. The following options are
+  also available:
 
   :text - You can supply a plain text version of the message, which
     will be included as an alternative.
@@ -87,9 +88,10 @@
     unpacked, i.e. not in a JAR.
 
   :src-map - This is a map holding files for image tags that, taking
-    the 'src' attribute as key. This map overrides the default lookup
-    when inlining. Note that the values in this map must support being
-    passed to clojure.java.io/file."
+    the 'src' attribute as key, contains resource values for inline
+    use. This map overrides the default lookup when inlining. Note
+    that the values in this map must support being passed to
+    clojure.java.io/file."
   [mail-system from to subject html & {:keys [text src-root src-map]}]
   (let [html-contents (make-inline html src-root src-map)
         contents (remove nil? [:alternative
