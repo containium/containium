@@ -32,7 +32,9 @@
 
   (send-message [this from to subject body opts]
     (debug logger "Sending email from" from "to" to "with subject" subject "using options" opts)
-    (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts))))
+    (let [from (str from)
+          to (map str (flatten [to]))]
+      (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts)))))
 
 
 (def ^{:doc "This Startable needs a Config system to in the systems. The
