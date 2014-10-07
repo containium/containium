@@ -31,9 +31,9 @@
     (send-message this from to subject body nil))
 
   (send-message [this from to subject body opts]
-    (debug logger "Sending email from" from "to" to "with subject" subject "using options" opts)
     (let [from (str from)
           to (map str (flatten [to]))]
+      (debug logger "Sending email from" from "to" (apply str (interpose ", " to)) "with subject" subject "using options" opts)
       (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts)))))
 
 
