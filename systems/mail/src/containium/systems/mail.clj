@@ -81,7 +81,7 @@
               (recur (zip/next (zip/edit loc assoc-in [:attrs :src] (str "cid:" cid)))
                      (cond-> contents
                              content (conj {:type :inline, :content content, :content-id cid
-                                            :content-type content-type}))))
+                                            :content-type content-type, :file-name src}))))
             (recur (zip/next loc) contents)))))))
 
 
