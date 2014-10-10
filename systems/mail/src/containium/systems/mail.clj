@@ -10,8 +10,10 @@
             [postal.core :as postal]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
-            [clojure.java.io :as io :refer (resource)])
-  (:import [java.io ByteArrayInputStream]))
+            [clojure.java.io :as io :refer (resource as-file)])
+  (:import [java.io ByteArrayInputStream FileInputStream BufferedInputStream File]
+           [java.nio.file Files]
+           [java.net URLConnection]))
 (refer-logging)
 
 
@@ -55,6 +57,12 @@
         (Postal. logger config)))))
 
 
+(defn- file-content-type
+  [^File file]
+  (with-open [stream (-> file FileInputStream. BufferedInputStream.)]
+    (URLConnection/guessContentTypeFromStream stream)))
+
+
 (defn- make-inline
   [html-str src-root src-map]
   (let [src-root (str src-root (when-not (= (last src-root) \/) "/"))]
@@ -68,10 +76,12 @@
           (if (= :img (:tag node))
             (let [cid (str (gensym "img-"))
                   src (-> node :attrs :src)
-                  content (or (get src-map src) (resource (str src-root src)))]
+                  content (as-file (or (get src-map src) (resource (str src-root src))))
+                  content-type (file-content-type content)]
               (recur (zip/next (zip/edit loc assoc-in [:attrs :src] (str "cid:" cid)))
                      (cond-> contents
-                             content (conj {:type :inline, :content content, :content-id cid}))))
+                             content (conj {:type :inline, :content content, :content-id cid
+                                            :content-type content-type}))))
             (recur (zip/next loc) contents)))))))
 
 
