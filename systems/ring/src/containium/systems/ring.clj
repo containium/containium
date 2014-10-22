@@ -63,7 +63,9 @@
 (defn- wrap-trim-context
   [handler context-path]
   (fn [request]
-    (handler (update-in request [:uri] #(subs % (count context-path))))))
+    (handler (-> request
+                 (update-in [:uri] #(subs % (count context-path)))
+                 (assoc :context-path context-path)))))
 
 
 (defn- wrap-call-in-box
