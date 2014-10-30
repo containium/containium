@@ -7,7 +7,7 @@
   :url "http://github.com/containium/containium"
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[boxure/clojure "1.5.1"]
+  :dependencies [[boxure/clojure "1.6.0"]
                  [boxure "0.1.0-SNAPSHOT"]
                  ;; Newer version of `nrepl` available, but only useable when leiningen starts
                  ;; using the newest `reply`.
