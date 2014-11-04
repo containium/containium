@@ -52,7 +52,7 @@
                             (assoc :started (time/format (time/datetime started)
                                                          :date-hour-minute-second-ms)
                                    ;; Maybe move the request parameters to a :request key as well?
-                                   :response (-> body
+                                   :response (-> response
                                                  (dissoc :body)
                                                  (assoc :took took)))
                             (when (instance? Throwable response)
