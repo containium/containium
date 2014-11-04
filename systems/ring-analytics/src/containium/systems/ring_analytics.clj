@@ -50,7 +50,9 @@
                             (dissoc :body :async-channel)
                             (assoc :started (time/format (time/datetime started)
                                                          :date-hour-minute-second-ms)
-                                   :took (- (System/currentTimeMillis) started))
+                                   :took (- (System/currentTimeMillis) started)
+                                   ;; Maybe move the request parameters to a :request key as well?
+                                   :response response)
                             (if (instance? Throwable response)
                               (assoc :failed (.getMessage ^Throwable response))
                               (assoc :status (:status response))))]
