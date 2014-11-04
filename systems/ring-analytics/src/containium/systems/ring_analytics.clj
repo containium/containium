@@ -46,16 +46,17 @@
         (let [started (System/currentTimeMillis)
               response (try (handler request)
                             (catch Throwable t (ex/exit-when-fatal t) t))
+              took (- (System/currentTimeMillis) started)
               processed (+> request
                             (dissoc :body :async-channel)
                             (assoc :started (time/format (time/datetime started)
                                                          :date-hour-minute-second-ms)
-                                   :took (- (System/currentTimeMillis) started)
                                    ;; Maybe move the request parameters to a :request key as well?
-                                   :response response)
-                            (if (instance? Throwable response)
-                              (assoc :failed (.getMessage ^Throwable response))
-                              (assoc :status (:status response))))]
+                                   :response (-> body
+                                                 (dissoc :body)
+                                                 (assoc :took took)))
+                            (when (instance? Throwable response)
+                              (assoc :failed (.getMessage ^Throwable response))))]
           (future (try (store-request client app-name processed)
                        (catch Throwable t
                          (ex/exit-when-fatal t)
