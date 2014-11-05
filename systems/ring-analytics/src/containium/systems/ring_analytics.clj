@@ -14,7 +14,6 @@
             [clojurewerkz.elastisch.native.document :as elastic]
             [clojurewerkz.elastisch.native.index :as esindex]
             [cheshire.core :as json]
-            [packthread.core :refer (+>)]
             [clojure.string :refer (lower-case)]))
 (refer-logging)
 
@@ -47,16 +46,17 @@
               response (try (handler request)
                             (catch Throwable t (ex/exit-when-fatal t) t))
               took (- (System/currentTimeMillis) started)
-              processed (+> request
+              processed (-> request
                             (dissoc :body :async-channel)
                             (assoc :started (time/format (time/datetime started)
-                                                         :date-hour-minute-second-ms)
-                                   ;; Maybe move the request parameters to a :request key as well?
-                                   :response (-> response
-                                                 (dissoc :body)
-                                                 (assoc :took took)))
-                            (when (instance? Throwable response)
-                              (assoc :failed (.getMessage ^Throwable response))))]
+                                                         :date-hour-minute-second-ms))
+                            (cond-> (instance? Throwable response)
+                                    (assoc :failed (.getMessage ^Throwable response)
+                                           :status 500)
+                                    (not (instance? Throwable response))
+                                    (assoc :response (-> response
+                                                         (dissoc :body)
+                                                         (assoc :took took)))))]
           (future (try (store-request client app-name processed)
                        (catch Throwable t
                          (ex/exit-when-fatal t)
