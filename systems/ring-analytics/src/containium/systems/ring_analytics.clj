@@ -55,7 +55,7 @@
                                                {:message (.getMessage ^Throwable response)
                                                 :stacktrace (with-out-str
                                                               (print-cause-trace response))
-                                                :class (class response)
+                                                :class (str (class response))
                                                 :status 500
                                                 :took took}
                                                (-> response
