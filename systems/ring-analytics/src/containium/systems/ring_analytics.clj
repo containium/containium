@@ -49,14 +49,14 @@
               processed (-> request
                             (dissoc :body :async-channel)
                             (assoc :started (time/format (time/datetime started)
-                                                         :date-hour-minute-second-ms))
-                            (cond-> (instance? Throwable response)
-                                    (assoc :failed (.getMessage ^Throwable response)
-                                           :status 500)
-                                    (not (instance? Throwable response))
-                                    (assoc :response (-> response
-                                                         (dissoc :body)
-                                                         (assoc :took took)))))]
+                                                         :date-hour-minute-second-ms)
+                                   :response (if (instance? Throwable response)
+                                               {:failed (.getMessage ^Throwable response)
+                                                :status 500
+                                                :took took}
+                                               (-> response
+                                                   (dissoc :body)
+                                                   (assoc :took took)))))]
           (future (try (store-request client app-name processed)
                        (catch Throwable t
                          (ex/exit-when-fatal t)
