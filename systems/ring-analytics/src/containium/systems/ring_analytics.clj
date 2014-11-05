@@ -14,7 +14,8 @@
             [clojurewerkz.elastisch.native.document :as elastic]
             [clojurewerkz.elastisch.native.index :as esindex]
             [cheshire.core :as json]
-            [clojure.string :refer (lower-case)]))
+            [clojure.string :refer (lower-case)]
+            [clojure.stacktrace :refer (print-cause-trace)]))
 (refer-logging)
 
 
@@ -51,7 +52,10 @@
                             (assoc :started (time/format (time/datetime started)
                                                          :date-hour-minute-second-ms)
                                    :response (if (instance? Throwable response)
-                                               {:failed (.getMessage ^Throwable response)
+                                               {:message (.getMessage ^Throwable response)
+                                                :stacktrace (with-out-str
+                                                              (print-cause-trace response))
+                                                :class (class response)
                                                 :status 500
                                                 :took took}
                                                (-> response
