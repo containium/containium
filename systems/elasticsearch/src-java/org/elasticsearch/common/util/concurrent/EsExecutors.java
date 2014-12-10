@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.util.concurrent;
 
+import com.google.common.base.Joiner;
 import org.elasticsearch.common.settings.Settings;
 
 import java.security.AccessController;
@@ -34,6 +35,11 @@ public class EsExecutors {
     static {
         System.out.println("[!!] Successfully loaded Containium™ overridden class: " + EsExecutors.class);
     }
+    /**
+     * Settings key to manually set the number of available processors.
+     * This is used to adjust thread pools sizes etc. per node.
+     */
+    public static final String PROCESSORS = "processors";
 
     /**
      * Returns the number of processors available but at most <tt>32</tt>.
@@ -43,7 +49,7 @@ public class EsExecutors {
          * ie. >= 48 create too many threads and run into OOM see #3478
          * We just use an 32 core upper-bound here to not stress the system
          * too much with too many created threads */
-        return settings.getAsInt("processors", Math.min(32, Runtime.getRuntime().availableProcessors()));
+        return settings.getAsInt(PROCESSORS, Math.min(32, Runtime.getRuntime().availableProcessors()));
     }
 
     public static PrioritizedEsThreadPoolExecutor newSinglePrioritizing(ThreadFactory threadFactory) {
@@ -72,6 +78,10 @@ public class EsExecutors {
         return new EsThreadPoolExecutor(size, size, 0, TimeUnit.MILLISECONDS, queue, threadFactory, new EsAbortPolicy());
     }
 
+    public static String threadName(Settings settings, String ... names) {
+        return threadName(settings, "[" +  Joiner.on(".").skipNulls().join(names) + "]");
+    }
+
     public static String threadName(Settings settings, String namePrefix) {
         String name = settings.get("name");
         if (name == null) {
@@ -84,6 +94,10 @@ public class EsExecutors {
 
     public static ThreadFactory daemonThreadFactory(Settings settings, String namePrefix) {
         return daemonThreadFactory(threadName(settings, namePrefix));
+    }
+
+    public static ThreadFactory daemonThreadFactory(Settings settings, String ... names) {
+        return daemonThreadFactory(threadName(settings, names));
     }
 
     public static ThreadFactory daemonThreadFactory(String namePrefix) {
