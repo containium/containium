@@ -16,7 +16,7 @@
                  [ring/ring-core "1.3.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
-                 [org.apache.cassandra/cassandra-all "2.0.10"
+                 [org.apache.cassandra/cassandra-all "2.0.11"
                   :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml]]
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.0-M4"]
