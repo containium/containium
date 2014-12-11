@@ -21,7 +21,7 @@
                  [org.yaml/snakeyaml "1.13"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
                  [org.elasticsearch/elasticsearch "1.4.1" :exclusions [org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
-                 [com.sonian/elasticsearch-zookeeper "1.4.0" :exclusions [org.jboss.netty/netty]]
+                 [com.sonian/elasticsearch-zookeeper "1.4.1" :exclusions [io.netty/netty]]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.1.1"]
                  [com.taoensso/nippy "2.5.2"]
