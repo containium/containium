@@ -10,6 +10,7 @@
             [containium.systems.logging :as logging :refer (refer-logging refer-command-logging)]
             [containium.exceptions :as ex]
             [ring.util.codec] ; load codec, because it is shared with boxes
+            [clj-time.format] ; load format, because it is shared with boxes
             [postal.core]))
 (refer-logging)
 (refer-command-logging)
@@ -74,7 +75,8 @@
                                                                "|ring\\.middleware.*"
                                                                "|ring\\.util\\.codec.*"
                                                                "|postal.*"
-                                                               "|org\\.httpkit.*"))]
+                                                               "|org\\.httpkit.*"
+                                                               "|clj.time.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
                                                              #(apply conj % (keys injected))))
                                             injected))

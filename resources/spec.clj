@@ -57,7 +57,6 @@
                       "clojure\\.core\\.match.*"
                       ;; Alia system deps
                       "qbits.*"
-                      "clj_time.*"
                       "cljs.core.async.*"
                       "clojure.core.async.*"
                       "lamina.*"
