@@ -56,6 +56,9 @@
 
 ;;; Helper functions.
 
+(defn uuid->datetime [uuid]
+  (-> uuid .timestamp (- 0x01b21dd213814000) (/ 10000) org.joda.time.DateTime.))
+
 (defn bytebuffer->inputstream
   "Returns an InputStream reading from a ByteBuffer."
   [^ByteBuffer bb]
