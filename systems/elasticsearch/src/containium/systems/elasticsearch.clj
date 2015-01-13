@@ -7,7 +7,11 @@
             [containium.systems.config :refer (Config get-config)]
             [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
   (:import [containium.systems Startable Stoppable]
-           [org.elasticsearch.node Node NodeBuilder]))
+           [org.elasticsearch.node Node NodeBuilder]
+           [org.elasticsearch.client ClusterAdminClient]
+           [org.elasticsearch.action ActionFuture]
+           [org.elasticsearch.action.admin.cluster.health ClusterHealthRequest
+            ClusterHealthResponse]))
 (refer-logging)
 
 
@@ -20,6 +24,34 @@
 
 ;;; The embedded implementation.
 
+;; (def stop-monitor (atom false))
+
+;; (defn- monitor
+;;   []
+;;   (println "[!!] ES monitor started.")
+;;   (loop [stop? @stop-monitor
+;;          last ""]
+;;     (if-not stop?
+;;       (let [new (slurp "http://localhost:9200/_cluster/health")]
+;;         (when (not= new last)
+;;           (println "[!!] health:" new))
+;;         (Thread/sleep 25)
+;;         (recur @stop-monitor new))
+;;       (println "[!!] ES monitor stopped."))))
+
+
+(defn- wait-until-started
+  "Wait until elastic node/cluster is ready."
+  [node]
+  (let [^ClusterHealthRequest chr (.. (ClusterHealthRequest. (make-array String 0))
+                                      (timeout "300s")
+                                      waitForYellowStatus)
+        ^ClusterAdminClient admin (.. node client admin cluster)
+        ^ActionFuture fut (.health admin chr)
+        ^ClusterHealthResponse resp (.actionGet fut)]
+    (not (.isTimedOut resp))))
+
+
 (defrecord EmbeddedElastic [^Node node logger]
   Elastic
   (node [_] node)
@@ -28,6 +60,7 @@
   (stop [_]
     (info logger "Stopping embedded ElasticSearch node...")
     (.close node)
+    ;; (reset! stop-monitor true)
     (info logger "Embedded ElasticSearch node stopped.")))
 
 
@@ -38,5 +71,9 @@
             logger (require-system SystemLogger systems)
             _ (info logger "Starting embedded ElasticSearch node, using config" config "...")
             node (.node (NodeBuilder/nodeBuilder))]
-        (info logger "Embedded ElasticSearsch node started.")
+        ;; (-> (Thread. monitor) .start)
+        (info logger "Waiting for Embedded ElasticSearch node to have initialised.")
+        (when-not (wait-until-started node)
+          (throw (Exception. "Could not initialise ES within 300 seconds.")))
+        (info logger "Embedded ElasticSearch node started.")
         (EmbeddedElastic. node logger)))))
