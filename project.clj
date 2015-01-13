@@ -14,6 +14,7 @@
                  [org.clojure/tools.nrepl "0.2.3"]
                  [jline "2.11"]
                  [ring/ring-core "1.3.0"]
+                 [clj-time "0.9.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
                  [org.apache.cassandra/cassandra-all "2.0.11"
