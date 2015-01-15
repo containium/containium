@@ -42,9 +42,9 @@
 
 (defn- wait-until-started
   "Wait until elastic node/cluster is ready."
-  [node]
+  [node timeout-secs]
   (let [^ClusterHealthRequest chr (.. (ClusterHealthRequest. (make-array String 0))
-                                      (timeout "300s")
+                                      (timeout (str timeout-secs "s"))
                                       waitForYellowStatus)
         ^ClusterAdminClient admin (.. node client admin cluster)
         ^ActionFuture fut (.health admin chr)
@@ -73,7 +73,7 @@
             node (.node (NodeBuilder/nodeBuilder))]
         ;; (-> (Thread. monitor) .start)
         (info logger "Waiting for Embedded ElasticSearch node to have initialised.")
-        (when-not (wait-until-started node)
+        (when-not (wait-until-started node (or (:wait-for-yellow-secs config) 300))
           (throw (Exception. "Could not initialise ES within 300 seconds.")))
         (info logger "Embedded ElasticSearch node started.")
         (EmbeddedElastic. node logger)))))
