@@ -11,7 +11,9 @@
             [containium.systems.logging :as logging :refer (refer-command-logging)]
             [boxure.core :as boxure]
             [packthread.core :refer (+>)]
-            [clojure.stacktrace :as stack])
+            [clojure.stacktrace :as stack]
+            [ring.middleware.params :refer (wrap-params)]
+            [ring.middleware.cookies :refer (wrap-cookies)])
   (:import [java.util Date]))
 (refer-command-logging)
 
@@ -137,7 +139,10 @@
                       (or (all-handlers request)
                           (miss-handler request))))
                   (constantly {:status 503 :body "no apps loaded"}))]
-    (wrap-exceptions handler)))
+    (-> handler
+        wrap-cookies
+        wrap-params
+        wrap-exceptions)))
 
 
 (defn clean-ring-conf

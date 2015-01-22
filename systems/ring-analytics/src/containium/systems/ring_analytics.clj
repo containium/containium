@@ -8,8 +8,6 @@
             [containium.systems.elasticsearch :as es-system :refer (Elastic)]
             [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]
             [containium.exceptions :as ex]
-            [ring.middleware.params]
-            [ring.middleware.cookies]
             [simple-time.core :as time]
             [clojurewerkz.elastisch.native.document :as elastic]
             [clojurewerkz.elastisch.native.index :as esindex]
@@ -42,34 +40,32 @@
 
 (defn- wrap-ring-analytics*
   [{:keys [client logger] :as record} app-name handler]
-  (-> (fn [request]
-        (let [started (System/currentTimeMillis)
-              response (try (handler request)
-                            (catch Throwable t (ex/exit-when-fatal t) t))
-              took (- (System/currentTimeMillis) started)
-              processed (-> request
-                            (dissoc :body :async-channel)
-                            (assoc :started (time/format (time/datetime started)
-                                                         :date-hour-minute-second-ms)
-                                   :response (if (instance? Throwable response)
-                                               {:message (.getMessage ^Throwable response)
-                                                :stacktrace (with-out-str
-                                                              (print-cause-trace response))
-                                                :class (str (class response))
-                                                :status 500
-                                                :took took}
-                                               (-> response
-                                                   (dissoc :body)
-                                                   (assoc :took took)))))]
-          (future (try (store-request client app-name processed)
-                       (catch Throwable t
-                         (ex/exit-when-fatal t)
-                         (error logger "Failed to store request for ring-analytics:")
-                         (error logger "Request (processed)" processed)
-                         (error logger t))))
-          (if (instance? Throwable response) (throw response) response)))
-      ring.middleware.cookies/wrap-cookies
-      ring.middleware.params/wrap-params))
+  (fn [request]
+    (let [started (System/currentTimeMillis)
+          response (try (handler request)
+                        (catch Throwable t (ex/exit-when-fatal t) t))
+          took (- (System/currentTimeMillis) started)
+          processed (-> request
+                        (dissoc :body :async-channel)
+                        (assoc :started (time/format (time/datetime started)
+                                                     :date-hour-minute-second-ms)
+                               :response (if (instance? Throwable response)
+                                           {:message (.getMessage ^Throwable response)
+                                            :stacktrace (with-out-str
+                                                          (print-cause-trace response))
+                                            :class (str (class response))
+                                            :status 500
+                                            :took took}
+                                           (-> response
+                                               (dissoc :body)
+                                               (assoc :took took)))))]
+      (future (try (store-request client app-name processed)
+                   (catch Throwable t
+                     (ex/exit-when-fatal t)
+                     (error logger "Failed to store request for ring-analytics:")
+                     (error logger "Request (processed)" processed)
+                     (error logger t))))
+      (if (instance? Throwable response) (throw response) response))))
 
 
 (defn- put-template
