@@ -9,11 +9,9 @@
             :url "http://mozilla.org/MPL/2.0/"}
   :dependencies [[boxure/clojure "1.6.0"]
                  [boxure "0.1.0-SNAPSHOT"]
-                 ;; Newer version of `nrepl` available, but only useable when leiningen starts
-                 ;; using the newest `reply`.
-                 [org.clojure/tools.nrepl "0.2.3"]
+                 [org.clojure/tools.nrepl "0.2.7"]
                  [jline "2.11"]
-                 [ring/ring-core "1.3.0"]
+                 [ring/ring-core "1.3.1"]
                  [clj-time "0.9.0"]
                  [http-kit "2.1.18"]
                  [org.apache.httpcomponents/httpclient "4.3.2"]
@@ -38,7 +36,7 @@
                  [com.draines/postal "1.11.1"]
                  [com.taoensso/timbre "3.2.1"]
                  [myguidingstar/clansi "1.3.0"]
-                 [lein-light-nrepl "0.0.18"]
+                 [lein-light-nrepl "0.1.0"]
                  ;; The `clojure-complete` is required by lein-light-nrepl, but when omitted,
                  ;; the `lein pom` result only includes it as 'test' scope.
                  [clojure-complete "0.2.3"]]
