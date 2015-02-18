@@ -13,7 +13,11 @@
             [clojurewerkz.elastisch.native.index :as esindex]
             [cheshire.core :as json]
             [clojure.string :refer (lower-case)]
-            [clojure.stacktrace :refer (print-cause-trace)]))
+            [clojure.stacktrace :refer (print-cause-trace)]
+            [overtone.at-at :as at])
+  (:import [org.elasticsearch.client Client]
+           [org.elasticsearch.action.admin.cluster.state ClusterStateResponse]
+           [org.elasticsearch.cluster.metadata IndexMetaData]))
 (refer-logging)
 
 
@@ -78,12 +82,50 @@
     :content-type :smile, :create? false))
 
 
-(defrecord ElasticAnalytics [client logger]
+(defn- indices-operations
+  "Optimizes and closes log-* indices. One can specify the days after
+  which the operations should take place."
+  [{:keys [^Client client logger] :as elastic-ring-analytics}
+   {:keys [optimize-after close-after] :or {optimize-after 2 close-after 7}}]
+  (info logger "Optimizing and closing old ring-analytics logs...")
+  (try
+    (let [metas (let [request (.. client admin cluster prepareState (setMetaData true)
+                                  (setIndices (into-array String ["log-*"]))
+                                  request)
+                      ^ClusterStateResponse response (.. client admin cluster (state request) get)]
+                  (.. response getState metaData indices))
+          today (time/today)
+          optimize-day (time/add-days today (- optimize-after))
+          close-day (time/add-days today (- close-after))
+          to-close (keep (fn [^IndexMetaData index-meta]
+                           (let [index (.index index-meta)
+                                 created (-> (.creationDate index-meta) time/datetime)]
+                             (if (time/< created close-day)
+                               index
+                               (when (time/< created optimize-day)
+                                 ;;---TODO Find out if already optimized
+                                 (info logger "Optimizing index:" index)
+                                 (esindex/optimize client index :max_num_segments 1)
+                                 nil))))
+                         (iterator-seq (.valuesIt metas)))]
+      (when (seq to-close)
+        (info logger "Closing indices:" (vec to-close))
+        (esindex/flush client to-close)
+        (esindex/close client (into-array String to-close))))
+    (info logger "Done optimizing and closing old ring-analytics logs.")
+    (catch Exception e
+      (error logger "Error optimizing and closing old ring-analytics logs.")
+      (error logger e))))
+
+
+(defrecord ElasticAnalytics [client logger atat]
   Analytics
   (wrap-ring-analytics [this app-name handler]
     (wrap-ring-analytics* this app-name handler))
   Stoppable
   (stop [this]
+    (info logger "Stopping Analytics based on ElasticSearch.")
+    (at/stop-and-reset-pool! atat :strategy :kill)
     (info logger "Stopped Analytics based on ElasticSearch.")))
 
 
@@ -93,7 +135,12 @@
       (let [elastic (systems/require-system Elastic systems)
             logger (systems/require-system SystemLogger systems)]
         (info logger "Starting Analytics based on ElasticSearch...")
-        (let [client (.client (es-system/node elastic))]
+        (let [client (.client (es-system/node elastic))
+              atat (at/mk-pool)
+              elastic-ring-analytics (ElasticAnalytics. client logger atat)]
           (put-template client)
+          (at/every (* 1000 60 60 24) ; 24 hours
+                    (partial indices-operations elastic-ring-analytics nil) atat
+                    :initial-delay (* 1000 60 10)) ; 10 minutes
           (info logger "Started Analytics based on ElasticSearch.")
-          (ElasticAnalytics. client logger))))))
+          elastic-ring-analytics)))))

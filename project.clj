@@ -39,7 +39,8 @@
                  [lein-light-nrepl "0.1.0"]
                  ;; The `clojure-complete` is required by lein-light-nrepl, but when omitted,
                  ;; the `lein pom` result only includes it as 'test' scope.
-                 [clojure-complete "0.2.3"]]
+                 [clojure-complete "0.2.3"]
+                 [overtone/at-at "1.2.0"]]
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]

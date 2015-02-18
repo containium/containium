@@ -44,6 +44,7 @@
                       "simple_time.*"
                       "postal.*"
                       "clj_http.*"
+                      "overtone\\.at_at.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
