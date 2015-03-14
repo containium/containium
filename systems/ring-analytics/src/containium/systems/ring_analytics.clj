@@ -75,6 +75,7 @@
 (defn- put-template
   [client]
   (esindex/put-template client "log", :template "log-*"
+    :settings {"index.refresh_interval" "5s"}
     :mappings {:request {:properties {"started" {:type "date"
                                                  :format "date_hour_minute_second_millis"}}
                                      :_source {:excludes ["params.password"
@@ -105,7 +106,7 @@
                                (when (time/< created optimize-day)
                                  ;;---TODO Find out if already optimized
                                  (info logger "Optimizing index:" index)
-                                 (esindex/optimize client index :max_num_segments 1)
+                                 (esindex/optimize client index :max-num-segments 1)
                                  nil))))
                          (iterator-seq (.valuesIt metas)))]
       (when (seq to-close)
