@@ -75,7 +75,9 @@
 (defn- put-template
   [client]
   (esindex/put-template client "log", :template "log-*"
-    :settings {"index.refresh_interval" "5s"}
+    :settings {"index.refresh_interval" "5s"
+               ;"index.codec" "best_compression" ;; Requires ES 2.0: https://github.com/elastic/elasticsearch/pull/8863
+    }
     :mappings {:request {:properties {"started" {:type "date"
                                                  :format "date_hour_minute_second_millis"}}
                                      :_source {:excludes ["params.password"
