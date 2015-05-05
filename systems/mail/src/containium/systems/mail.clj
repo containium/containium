@@ -91,6 +91,10 @@
   address, a subject, and the HTML string. The following options are
   also available:
 
+  :cc - A single string or a seq of strings with CC addresses.
+
+  :bcc - A single string or a seq of strings with Blind CC addresses.
+
   :text - You can supply a plain text version of the message, which
     will be included as an alternative.
 
@@ -108,10 +112,12 @@
     use. This map overrides the default lookup when inlining. Note
     that the values in this map must support being passed to
     clojure.java.io/file."
-  [mail-system from to subject html & {:keys [text attachments src-root src-map]}]
+  [mail-system from to subject html & {:keys [cc bcc text attachments src-root src-map]}]
   (let [html-contents (make-inline html src-root src-map)
         contents (remove nil? [:alternative
                                (when text {:type "text/plain" :content text})
                                (cons :related html-contents)])
         attachments (map (fn [a] (assoc a :type :attachment)) attachments)]
-    (send-message mail-system from to subject (concat contents attachments))))
+    (send-message mail-system from to subject (concat contents attachments)
+                  (merge (when cc {:cc cc})
+                         (when bcc {:bcc bcc})))))
