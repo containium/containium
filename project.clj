@@ -55,12 +55,12 @@
                        :uberjar-exclusions [#"^[^/]+?(ya?ml|spec.clj)$"]}}
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
-             "-XX:MaxPermSize=512m"
+             "-XX:MaxPermSize=1024m"
              "-Djava.net.preferIPv4Stack=true"
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
-             "-Xmx500m" ; max heap size.
+             "-Xmx2048m" ; max heap size.
              "-XX:OnOutOfMemoryError=./killpid.sh %p"
              ]
   :repl-options {:port 13337}

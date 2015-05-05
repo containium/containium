@@ -94,6 +94,10 @@
   :text - You can supply a plain text version of the message, which
     will be included as an alternative.
 
+  :attachments - You can supply a seq of attachment maps. These maps
+    should at least contain a :content value, and may also contain
+    :content-type and :file-name.
+
   :src-root - The root directory/package in which the image resources
     can be found on the classpath for inlining. Note that due to a
     limitation in javax.mail/Postal the actual resource must be
@@ -104,9 +108,10 @@
     use. This map overrides the default lookup when inlining. Note
     that the values in this map must support being passed to
     clojure.java.io/file."
-  [mail-system from to subject html & {:keys [text src-root src-map]}]
+  [mail-system from to subject html & {:keys [text attachments src-root src-map]}]
   (let [html-contents (make-inline html src-root src-map)
         contents (remove nil? [:alternative
                                (when text {:type "text/plain" :content text})
-                               (cons :related html-contents)])]
-    (send-message mail-system from to subject contents)))
+                               (cons :related html-contents)])
+        attachments (map (fn [a] (assoc a :type :attachment)) attachments)]
+    (send-message mail-system from to subject (concat contents attachments))))
