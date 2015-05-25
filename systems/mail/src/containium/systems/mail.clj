@@ -114,10 +114,15 @@
     clojure.java.io/file."
   [mail-system from to subject html & {:keys [cc bcc text attachments src-root src-map]}]
   (let [html-contents (make-inline html src-root src-map)
-        contents (remove nil? [:alternative
-                               (when text {:type "text/plain" :content text})
-                               (cons :related html-contents)])
-        attachments (map (fn [a] (assoc a :type :attachment)) attachments)]
-    (send-message mail-system from to subject (concat contents attachments)
+        attachment-contents (map (fn [a] (assoc a :type :attachment)) attachments)
+        body-contents (if text
+                        [:alternative
+                         {:type "text/plain" :content text}
+                         (cons :related html-contents)]
+                        (cons :related html-contents))
+        contents (if (seq attachment-contents)
+                   [:mixed body-contents attachments]
+                   body-contents)]
+    (send-message mail-system from to subject contents
                   (merge (when cc {:cc cc})
                          (when bcc {:bcc bcc})))))
