@@ -105,7 +105,7 @@
       (catch Throwable t
         (ex/exit-when-fatal t)
         (let [now (Date.)
-              msg (str "Error handling request at " (Date.) ":\n"
+              msg (str "Error handling request at " now ":\n"
                        request
                        "\nCause by:\n"
                        (with-out-str (stack/print-cause-trace t)))]
