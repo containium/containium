@@ -45,6 +45,7 @@
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
   :aot [containium.starter containium.systems.cassandra.config]
+  :auto-clean false
   :main containium.starter
   :profiles {:doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
              :aot {:aot [containium.core]}
