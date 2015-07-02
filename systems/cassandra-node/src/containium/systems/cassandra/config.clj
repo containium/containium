@@ -4,15 +4,13 @@
 
 (ns containium.systems.cassandra.config
   (:refer-clojure :exclude [munge])
-  (:require [containium.systems.logging :refer (refer-logging)]
-            [clojure.java.io :as io])
+  (:require [clojure.java.io :as io])
   (:import [org.apache.cassandra.config Config Config$CommitLogSync Config$DiskFailurePolicy
             SeedProviderDef]
            [java.util LinkedHashMap]
            [java.net URL])
   (:gen-class :extends org.apache.cassandra.config.YamlConfigurationLoader
               :exposes-methods {loadConfig superLoadConfig}))
-(refer-logging)
 
 
 (defonce system-config (promise))
@@ -66,7 +64,7 @@
           "Logger not realized; config loaded before containium was able to set it.")
   (assert (realized? system-config)
           "Configuration not realized; config loaded before containium was able to set it.")
-  (info @logger "Constructing Cassandra config from:" (pr-str @system-config))
+  (println "[INFO] Constructing Cassandra config from:" (pr-str @system-config))
   (let [config (if-let [url (:config-file @system-config)]
                  (.superLoadConfig this ^URL (io/resource url))
                  (Config.))]
