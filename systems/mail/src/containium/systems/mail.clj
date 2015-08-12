@@ -121,7 +121,7 @@
                          (cons :related html-contents)]
                         (cons :related html-contents))
         contents (if (seq attachment-contents)
-                   [:mixed body-contents attachments]
+                   [:mixed body-contents attachment-contents]
                    body-contents)]
     (send-message mail-system from to subject contents
                   (merge (when cc {:cc cc})
