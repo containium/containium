@@ -42,7 +42,7 @@
 
 (defn- wait-until-started
   "Wait until elastic node/cluster is ready."
-  [node timeout-secs]
+  [^Node node timeout-secs]
   (let [^ClusterHealthRequest chr (.. (ClusterHealthRequest. (make-array String 0))
                                       (timeout (str timeout-secs "s"))
                                       waitForYellowStatus)
