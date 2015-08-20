@@ -66,7 +66,7 @@
 
 
 (defn- make-inline
-  [html-str src-root src-map]
+  [^String html-str src-root src-map]
   (let [src-root (str src-root (when-not (= (last src-root) \/) "/"))]
     (loop [loc (zip/xml-zip (xml/parse (ByteArrayInputStream. (.getBytes (.trim html-str)))))
            contents []]
