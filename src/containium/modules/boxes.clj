@@ -15,6 +15,15 @@
 (refer-logging)
 (refer-command-logging)
 
+
+(def ^{:doc "Useful to ensure systems run in the containium root context"}
+  systems-box
+  (delay (boxure.core/->Boxure "containium" (.getClassLoader clojure.lang.RT) {}
+                               (clojure.lang.Var/getThreadBindingFrame))))
+
+(defmacro call-in-root [& body]
+  `(boxure/call-in-box @systems-box ~@body))
+
 (def meta-merge #'leiningen.core.project/meta-merge)
 
 (defn- check-project

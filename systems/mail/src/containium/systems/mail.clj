@@ -7,6 +7,7 @@
   (:require [containium.systems :refer (require-system Startable)]
             [containium.systems.config :as config :refer (Config)]
             [containium.systems.logging :refer (SystemLogger refer-logging)]
+            [containium.modules.boxes :refer (call-in-root)]
             [postal.core :as postal]
             [classlojure.core :refer (with-classloader)]
             [clojure.xml :as xml]
@@ -124,7 +125,7 @@
         contents (if (seq attachment-contents)
                    [:mixed body-contents attachment-contents]
                    body-contents)]
-    (with-classloader (.getClassLoader Postal)
+    (call-in-root
       (send-message mail-system from to subject contents
                     (merge (when cc {:cc cc})
                            (when bcc {:bcc bcc}))))))
