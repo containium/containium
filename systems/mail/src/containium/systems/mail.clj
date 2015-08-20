@@ -8,6 +8,7 @@
             [containium.systems.config :as config :refer (Config)]
             [containium.systems.logging :refer (SystemLogger refer-logging)]
             [postal.core :as postal]
+            [classlojure.core :refer (with-classloader)]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
             [clojure.java.io :as io :refer (resource as-file)])
@@ -114,7 +115,7 @@
     clojure.java.io/file."
   [mail-system from to subject html & {:keys [cc bcc text attachments src-root src-map]}]
   (let [html-contents (make-inline html src-root src-map)
-        attachment-contents (map (fn [a] (assoc a :type :attachment)) attachments)
+        attachment-contents (doall (map (fn [a] (assoc a :type :attachment)) attachments))
         body-contents (if text
                         [:alternative
                          {:type "text/plain" :content text}
@@ -123,6 +124,7 @@
         contents (if (seq attachment-contents)
                    [:mixed body-contents attachment-contents]
                    body-contents)]
-    (send-message mail-system from to subject contents
-                  (merge (when cc {:cc cc})
-                         (when bcc {:bcc bcc})))))
+    (with-classloader (.getClassLoader Postal)
+      (send-message mail-system from to subject contents
+                    (merge (when cc {:cc cc})
+                           (when bcc {:bcc bcc}))))))
