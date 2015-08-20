@@ -22,7 +22,7 @@
   [callback]
   (println "Wrapping http-kit callback!")
   (fn [message]
-    (with-classloader (.. callback getClass getClassLoader)
+    (with-classloader (-> callback class .getClassLoader)
       (callback message))))
 
 (extend-type org.httpkit.server.AsyncChannel
