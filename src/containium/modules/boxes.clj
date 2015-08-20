@@ -74,7 +74,6 @@
                                                                "|clojure.(java|xml|zip).*"
                                                                "|ring\\.middleware.*"
                                                                "|ring\\.util\\.codec.*"
-                                                               "|postal.*"
                                                                "|org\\.httpkit.*"
                                                                "|clj.time.*"))]
                                             (dosync (commute @#'clojure.core/*loaded-libs*
