@@ -7,7 +7,7 @@
   (:require [containium.systems :refer (require-system Startable)]
             [containium.systems.config :as config :refer (Config)]
             [containium.systems.logging :refer (SystemLogger refer-logging)]
-            [containium.modules.boxes :refer (call-in-root systems-box)]
+            [boxure.core :refer (->Boxure) :as boxure]
             [postal.core :as postal]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
@@ -28,7 +28,7 @@
 
 ;;; An SMTP implementation using Postal
 
-(defrecord Postal [logger smtp]
+(defrecord Postal [logger box smtp]
   Mail
   (send-message [this from to subject body]
     (send-message this from to subject body nil))
@@ -37,7 +37,8 @@
     (let [from (str from)
           to (map str (flatten [to]))]
       (debug logger "Sending email from" from "to" (apply str (interpose ", " to)) "with subject" subject "using options" opts)
-      (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts)))))
+      (boxure/call-in-box (.box this)
+        (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts))))))
 
 
 (def ^{:doc "This Startable needs a Config system to in the systems. The
@@ -53,10 +54,11 @@
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) :postal)
-            logger (require-system SystemLogger systems)]
+            logger (require-system SystemLogger systems)
+            sysbox (->Boxure "postal" (.getClassLoader clojure.lang.RT)
+                             {} (clojure.lang.Var/getThreadBindingFrame))]
         (info logger "Starting Postal system, using config:" config)
-        @systems-box
-        (Postal. logger config)))))
+        (Postal. logger sysbox config)))))
 
 
 (defn- file-content-type
@@ -125,7 +127,6 @@
         contents (if (seq attachment-contents)
                    [:mixed body-contents attachment-contents]
                    body-contents)]
-    (call-in-root
-      (send-message mail-system from to subject contents
-                    (merge (when cc {:cc cc})
-                           (when bcc {:bcc bcc}))))))
+    (send-message mail-system from to subject contents
+                  (merge (when cc {:cc cc})
+                         (when bcc {:bcc bcc})))))
