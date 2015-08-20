@@ -7,9 +7,8 @@
   (:require [containium.systems :refer (require-system Startable)]
             [containium.systems.config :as config :refer (Config)]
             [containium.systems.logging :refer (SystemLogger refer-logging)]
-            [containium.modules.boxes :refer (call-in-root)]
+            [containium.modules.boxes :refer (call-in-root systems-box)]
             [postal.core :as postal]
-            [classlojure.core :refer (with-classloader)]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
             [clojure.java.io :as io :refer (resource as-file)])
@@ -56,6 +55,7 @@
       (let [config (config/get-config (require-system Config systems) :postal)
             logger (require-system SystemLogger systems)]
         (info logger "Starting Postal system, using config:" config)
+        @systems-box
         (Postal. logger config)))))
 
 
