@@ -108,5 +108,6 @@
                                   (str "UPDATE ring.sessions USING TTL " (* 60 60 24 ttl-days)
                                        " SET data = ? WHERE key = ?;"))
             remove-q (prepare cassandra "DELETE FROM ring.sessions WHERE key = ?;")]
+        (-> {} (freeze) (thaw))
         (info logger "Cassandra Ring session store started.")
         (CassandraStore. ttl-mins cassandra read-q write-q write-q-long remove-q)))))

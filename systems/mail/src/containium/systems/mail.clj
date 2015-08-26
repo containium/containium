@@ -37,7 +37,7 @@
     (let [from (str from)
           to (map str (flatten [to]))]
       (debug logger "Sending email from" from "to" (apply str (interpose ", " to)) "with subject" subject "using options" opts)
-      (boxure/call-in-box (.box this)
+      (boxure/call-in-box box
         (postal/send-message smtp (merge {:from from, :to to, :subject subject, :body body} opts))))))
 
 
