@@ -15,9 +15,9 @@
 
 
 (defn run [spec {:keys [start stop ring profiles active-profiles dev?]
-                 :or {:profiles [dev provided user system base]
-                      :active-profiles [dev provided user system base]
-                      :dev? true}
+                 :or {profiles [:dev :provided :user :system :base :containium :clj]
+                      active-profiles [:dev :provided :user :system :base :containium :clj]
+                      dev? true}
                  :as containium-map}]
   (with-systems systems [:config (map-config spec)
                          :logging logging/logger

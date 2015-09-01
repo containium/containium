@@ -78,7 +78,7 @@
   In a later stage (i.e. start-box) the :name, :project and :profiles keys can be conj'd."
   [^File file]
   (assert file "Path to module, or module descriptor File required!")
-  (let [descriptor-defaults {:file file, :profiles [:default]}]
+  (let [descriptor-defaults {:file file, :profiles [:containium :clj :default]}]
     (assert (.exists file) (str file " does not exist."))
     (if (.isDirectory file)
       descriptor-defaults
@@ -91,7 +91,8 @@
                      (File. (.getParent file) file-str)
                      (File. file-str))]
           (assert (.exists file) (str file " does not exist."))
-          (merge descriptor-defaults module-map {:file file}))
+          (-> (merge descriptor-defaults module-map {:file file})
+              (update-in [:profiles] conj :containium :clj)))
         ;; else if not a module descriptor file.
         descriptor-defaults))))
 
