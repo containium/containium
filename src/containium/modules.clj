@@ -91,8 +91,7 @@
                      (File. (.getParent file) file-str)
                      (File. file-str))]
           (assert (.exists file) (str file " does not exist."))
-          (-> (merge descriptor-defaults module-map {:file file})
-              (update-in [:profiles] conj :containium :clj)))
+          (merge descriptor-defaults module-map {:file file}))
         ;; else if not a module descriptor file.
         descriptor-defaults))))
 
@@ -147,7 +146,8 @@
     (if (-> descriptor :containium :ring)
         (update-in descriptor [:containium :ring] clean-ring-conf)
        #_else descriptor)
-    (assoc :name name)))
+    (assoc :name name)
+    (update-in [:profiles] conj :containium :clj)))
 
 
 (defn- do-deploy
