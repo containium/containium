@@ -14,7 +14,7 @@
                  [org.clojure/tools.reader "0.9.2"]
                  [clj-time "0.9.0"]
                  [joda-time "2.8.1"]
-                 [http-kit "2.1.18"]
+                 [http-kit "2.1.19"]
                  [org.apache.httpcomponents/httpclient "4.5"]
                  [org.apache.cassandra/cassandra-all "2.0.16"
                   :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty net.jpountz.lz4/lz4 org.apache.commons/commons-lang3 org.slf4j/slf4j-api log4j]]
