@@ -9,7 +9,8 @@
             [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]
             [containium.exceptions :as ex]
             [simple-time.core :as time]
-            [clojurewerkz.elastisch.native.document :as elastic]
+            [clojurewerkz.elastisch.native :as es]
+            [clojurewerkz.elastisch.native.conversion :as cnv]
             [clojurewerkz.elastisch.native.index :as esindex]
             [cheshire.core :as json]
             [clojure.string :refer (lower-case)]
@@ -39,7 +40,9 @@
 
 (defn- store-request
   [client app-name request]
-  (elastic/create client (daily-index app-name) "request" request :content-type :smile))
+  (es/index client (cnv/->index-request (daily-index app-name)
+                                        "request" request
+                                        {:op-type "create", :content-type :smile})))
 
 
 (defn- wrap-ring-analytics*
@@ -63,12 +66,12 @@
                                            (-> response
                                                (dissoc :body)
                                                (assoc :took took)))))]
-      (future (try (store-request client app-name processed)
-                   (catch Throwable t
-                     (ex/exit-when-fatal t)
-                     (error logger "Failed to store request for ring-analytics:")
-                     (error logger "Request (processed)" processed)
-                     (error logger t))))
+      (try (store-request client app-name processed)
+           (catch Throwable t
+             (ex/exit-when-fatal t)
+             (error logger "Failed to store request for ring-analytics:")
+             (error logger "Request (processed)" processed)
+             (error logger t)))
       (if (instance? Throwable response) (throw response) response))))
 
 
