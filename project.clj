@@ -21,7 +21,7 @@
                  [com.google.guava/guava "15.0"] ;; Cassandra still requires Guava 15
                  [org.yaml/snakeyaml "1.15"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
-                 [org.elasticsearch/elasticsearch "1.4.5" :exclusions [org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
+                 [org.elasticsearch/elasticsearch "1.7.3" :exclusions [org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
                  [clojurewerkz/elastisch "2.1.0" :exclusions [clj-http com.google.guava/guava org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.2.1"]
