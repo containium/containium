@@ -25,7 +25,7 @@
                  [org.codehaus.groovy/groovy-all "2.4.0"] ;; To enable groovy scripts in ElasticSearch
                  [clojurewerkz/elastisch "2.1.0"]
                  [org.scala-lang/scala-library "2.9.2"]
-                 [org.apache.kafka/kafka_2.9.2 "0.8.2.1" :exclusions [org.slf4j/slf4j-log4j12 log4j]]
+                 [org.apache.kafka/kafka_2.9.2 "0.8.2.2" :exclusions [org.slf4j/slf4j-log4j12 log4j]]
                  [com.taoensso/nippy "2.6.0"]
                  [com.taoensso/encore "1.37.0"]
                  [org.clojars.touch/elasticsearch-lang-clojure "0.2.0-SNAPSHOT"]
