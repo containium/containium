@@ -16,22 +16,23 @@
                  [joda-time "2.8.1"]
                  [http-kit "2.1.19"]
                  [org.apache.httpcomponents/httpclient "4.5"]
-                 [org.apache.cassandra/cassandra-all "2.0.17"
-                  :exclusions [com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty net.jpountz.lz4/lz4 org.apache.commons/commons-lang3 org.slf4j/slf4j-api log4j]]
-                 [com.google.guava/guava "15.0"] ;; Cassandra still requires Guava 15
+                 [org.apache.cassandra/cassandra-all "2.2.3"
+                  :exclusions [com.google.guava/guava com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty org.apache.commons/commons-lang3]]
+                 ;[com.google.guava/guava "15.0"] ;; Cassandra still requires Guava 15
                  [org.yaml/snakeyaml "1.15"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
-                 [org.elasticsearch/elasticsearch "1.7.3" :exclusions [org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
-                 [clojurewerkz/elastisch "2.1.0" :exclusions [clj-http com.google.guava/guava org.antlr/antlr-runtime]] ;; Cassandra requires [org.antlr/antlr "3.2"]
+                 [org.elasticsearch/elasticsearch "1.7.3"]
+                 [org.codehaus.groovy/groovy-all "2.4.0"] ;; To enable groovy scripts in ElasticSearch
+                 [clojurewerkz/elastisch "2.1.0"]
                  [org.scala-lang/scala-library "2.9.2"]
-                 [org.apache.kafka/kafka_2.9.2 "0.8.2.1"]
+                 [org.apache.kafka/kafka_2.9.2 "0.8.2.1" :exclusions [org.slf4j/slf4j-log4j12 log4j]]
                  [com.taoensso/nippy "2.6.0"]
                  [com.taoensso/encore "1.37.0"]
                  [org.clojars.touch/elasticsearch-lang-clojure "0.2.0-SNAPSHOT"]
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.8.5"]
-                 [cc.qbits/alia "2.5.1"]
+                 [cc.qbits/alia "2.5.1" :exclusions [org.clojure/core.async]]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.2.0"]
                  [com.maitria/packthread "0.1.6"]

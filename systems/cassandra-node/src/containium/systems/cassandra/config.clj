@@ -6,7 +6,7 @@
   (:refer-clojure :exclude [munge])
   (:require [clojure.java.io :as io])
   (:import [org.apache.cassandra.config Config Config$CommitLogSync Config$DiskFailurePolicy
-            SeedProviderDef]
+            ParameterizedClass]
            [java.util LinkedHashMap]
            [java.net URL])
   (:gen-class :extends org.apache.cassandra.config.YamlConfigurationLoader
@@ -55,7 +55,7 @@
         (-> {"class_name" (:class-name value (value "class_name"))
              "parameters" (:parameters value (value "parameters"))}
             LinkedHashMap.
-            SeedProviderDef.)))
+            ParameterizedClass.)))
 
 
 (defn -loadConfig

@@ -15,6 +15,7 @@
            [org.apache.cassandra.db.marshal AbstractType BooleanType BytesType DateType DecimalType
             DoubleType EmptyType FloatType InetAddressType Int32Type IntegerType ListType LongType
             MapType SetType UTF8Type UUIDType]
+           [org.apache.cassandra.cql3.statements ParsedStatement$Prepared]
            [org.apache.cassandra.service CassandraDaemon QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
            [java.util List Map Set UUID Date]
@@ -109,12 +110,13 @@
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   List
-  (abstract-type [value] (ListType/getInstance ^AbstractType (abstract-type (first value))))
+  (abstract-type [value] (ListType/getInstance ^AbstractType (abstract-type (first value)), true))
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Map
   (abstract-type [value] (MapType/getInstance (abstract-type (ffirst value))
-                                              (abstract-type (second (first value)))))
+                                              (abstract-type (second (first value)))
+                                              true))
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Long
@@ -122,7 +124,7 @@
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   Set
-  (abstract-type [value] (SetType/getInstance ^AbstractType (abstract-type (first value))))
+  (abstract-type [value] (SetType/getInstance ^AbstractType (abstract-type (first value)), true))
   (encode-value [value] (.decompose ^AbstractType (abstract-type value) value))
 
   String
@@ -153,14 +155,14 @@
 
 
 (defn- do-prepared*
-  [{:keys [query-state]} statement opts values]
+  [{:keys [query-state]} ^ParsedStatement$Prepared pq opts values]
   (let [consistency (kw->consistency (get opts :consistency *consistency*))
         _ (assert consistency "Missing :consistency and *consistency* not bound.")
-        options (QueryOptions. consistency (map encode-value values))
-        result (.processPrepared QueryProcessor/instance statement query-state options)]
+        options (QueryOptions/forInternalCalls consistency (map encode-value values))
+        result (.processPrepared QueryProcessor/instance (. pq statement) query-state options)]
     (when (instance? ResultMessage$Rows result)
       (if (:raw? opts)
-        (UntypedResultSet. (.result ^ResultMessage$Rows result))
+        (UntypedResultSet/create (.result ^ResultMessage$Rows result))
         (decode-resultset (.result ^ResultMessage$Rows result)
                           (get opts :keywordize? *keywordize*))))))
 
