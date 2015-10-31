@@ -23,7 +23,7 @@
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
                  [org.elasticsearch/elasticsearch "1.7.3"]
                  [org.codehaus.groovy/groovy-all "2.4.0"] ;; To enable groovy scripts in ElasticSearch
-                 [clojurewerkz/elastisch "2.1.0"]
+                 [clojurewerkz/elastisch "2.1.0" :exclusions [clj-http]]
                  [org.scala-lang/scala-library "2.9.2"]
                  [org.apache.kafka/kafka_2.9.2 "0.8.2.2" :exclusions [org.slf4j/slf4j-log4j12 log4j]]
                  [com.taoensso/nippy "2.6.0"]
