@@ -56,7 +56,7 @@
 
 ;;; Helper functions.
 
-(defn uuid->datetime [uuid]
+(defn uuid->datetime [^java.util.UUID uuid]
   (-> uuid .timestamp (- 0x01b21dd213814000) (/ 10000) org.joda.time.DateTime.))
 
 (defn bytebuffer->inputstream

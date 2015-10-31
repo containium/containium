@@ -15,7 +15,8 @@
             [ring.middleware.session.store :refer (SessionStore read-session)]
             [taoensso.nippy :refer (freeze thaw)]
             [clojure.java.io :refer (resource)])
-  (:import [java.util UUID]))
+  (:import [java.util UUID]
+           [java.nio ByteBuffer]))
 (refer-logging)
 
 
@@ -27,7 +28,7 @@
   [cassandra read-query key]
   (when-let [result (first (do-prepared cassandra read-query
                                         {:consistency session-consistency} [key]))]
-    (-> (get result "data")
+    (-> ^ByteBuffer (get result "data")
         .slice
         bytebuffer->bytes
         thaw)))
