@@ -17,6 +17,7 @@
           :keystore "dev-resources/dev_keystore.jks"
           :key-password "whoopwhoop"}
  :cassandra {:config-file "cassandra-test.yaml"
+             :triggers-dir "target"
              :listen-address "localhost"}
  :alia {:contact-points ["localhost"]
         :port 9042}

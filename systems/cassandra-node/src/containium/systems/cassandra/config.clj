@@ -68,6 +68,8 @@
   (let [config (if-let [url (:config-file @system-config)]
                  (.superLoadConfig this ^URL (io/resource url))
                  (Config.))]
-    (doseq [[k v] (dissoc @system-config :config-file)]
+    (when-let [triggers-dir (:triggers-dir @system-config)]
+      (System/setProperty "cassandra.triggers_dir", (str triggers-dir)))
+    (doseq [[k v] (dissoc @system-config :config-file :triggers-dir)]
       (override config (munge k) v))
     config))
