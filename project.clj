@@ -32,7 +32,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.8.5"]
-                 [cc.qbits/alia "2.7.4" :exclusions [org.clojure/core.async]]
+                 [cc.qbits/alia "2.7.4" :exclusions [org.clojure/core.async com.codahale.metrics/metrics-core]]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.2.0"]
                  [com.maitria/packthread "0.1.6"]
