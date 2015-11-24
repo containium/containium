@@ -33,7 +33,7 @@
 ;;; File system implementation.
 
 ;;---TODO Replace regexes with simpler/faster .endsWith calls?
-(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status|deactivated)$).)+")
+(def ^:private descriptor-files-re #"[^\.]((?!\.(activate|status|deactivated|template)$).)+")
 (def ^:private activate-files-re   #"[^\.].*\.activate")
 
 
