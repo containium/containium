@@ -19,8 +19,11 @@
 (defn parse-quoted
   "Parses quoted parts in a command string. Returns [command & args]"
   [string]
-  (map (fn [[normal quoted]] (or quoted normal))
-       (re-seq #"'([^']+)'|[^\s]+" (trim string))))
+  (if-not (nil? string)
+    (map (fn [[normal quoted]] (or quoted normal))
+         (re-seq #"'([^']+)'|[^\s]+" (trim string)))
+  ;else
+    ["shutdown"]))
 
 
 ;;; Actual commands.
