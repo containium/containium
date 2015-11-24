@@ -44,7 +44,8 @@
       (let [config (get-config (require-system Config systems) :jetty9)
             logger (require-system SystemLogger systems)
             _ (info logger "Starting Jetty9 server, using config" config)
-            ring-analytics (require-system Analytics systems)
+            ring-analytics (try (require-system Analytics systems)
+                        (catch Exception e (info logger "No ring-analytics system loaded" config)))
             app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             server (jetty9/run-jetty app-fn config)]

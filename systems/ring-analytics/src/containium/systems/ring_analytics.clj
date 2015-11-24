@@ -30,6 +30,10 @@
     app name for the log name. The body is not read by this
     middleware."))
 
+(extend-type nil
+  Analytics
+  (wrap-ring-analytics [this app-name handler] handler))
+
 
 ;;; ElasticSearch implementation.
 

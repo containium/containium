@@ -66,7 +66,8 @@
       (let [config (get-config (require-system Config systems) :http-kit)
             logger (require-system SystemLogger systems)
             _ (info logger "Starting HTTP-kit server, using config" config)
-            ring-analytics (require-system Analytics systems)
+            ring-analytics (try (require-system Analytics systems)
+                        (catch Exception e (info logger "No ring-analytics system loaded" config)))
             app (atom (make-app println ring-analytics {}))
             app-fn (fn [request] (@app request))
             stop-fn (httpkit/run-server app-fn config)]
