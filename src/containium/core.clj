@@ -29,6 +29,7 @@
 
 ;; Convenience alias
 (def ^:macro eval-in #'containium.reactor/eval-in)
+(alter-meta! #'eval-in assoc :macro true) ; Clojure wart...
 
 
 (defn -main
