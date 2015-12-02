@@ -45,7 +45,7 @@
   :exclusions [org.clojure/clojure org.xerial.snappy/snappy-java org.mortbay.jetty/jetty
                javax.jms/jms com.sun.jdmk/jmxtools com.sun.jmx/jmxri]
   :java-source-paths ["src-java"]
-  :aot [containium.starter containium.systems.cassandra.config]
+  :aot [containium.starter containium.with-external-cassandra containium.cassandra-node containium.systems.cassandra.config]
   :auto-clean false
   :main containium.starter
   :profiles {:doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
