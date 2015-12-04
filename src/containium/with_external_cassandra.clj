@@ -6,7 +6,6 @@
   (:require [containium.systems :refer (with-systems)]
             [containium.systems.cassandra.alia :as cassandra]
             [containium.systems.elasticsearch :as elastic]
-            [containium.systems.kafka :as kafka]
             [containium.systems.ring :as ring]
             [containium.systems.ring.http-kit :as http-kit]
             [containium.systems.ring.jetty9 :as jetty9]
@@ -42,9 +41,8 @@
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                               :logging logging/logger
                               :mail mail/postal
-                              :cassandra (cassandra/alia :alia)
                               :elastic elastic/embedded
-                              :kafka kafka/embedded
+                              :cassandra (cassandra/alia :alia)
                               :session-store cass-session/default
                               :ring-analytics ring-analytics/elasticsearch
                               :http-kit http-kit/http-kit

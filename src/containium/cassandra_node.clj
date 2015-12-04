@@ -6,6 +6,7 @@
   (:require [containium.systems :refer (with-systems)]
             [containium.systems.cassandra.embedded :as cassandra]
             [containium.systems.config :as config]
+            [containium.systems.kafka :as kafka]
             [containium.systems.logging :as logging :refer (refer-logging)]
             [containium.exceptions :as ex]
             [containium.reactor :as reactor]
@@ -23,6 +24,7 @@
   (ex/register-default-handler)
   (try (with-systems systems [:config (config/file-config (as-file (resource "spec.clj")))
                               :logging logging/logger
+                              :kafka kafka/embedded
                               :cassandra cassandra/embedded]
          (reactor/run-daemon systems))
        (catch Exception ex
