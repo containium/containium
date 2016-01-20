@@ -46,6 +46,8 @@
                       "postal.*"
                       "clj_http.*"
                       "overtone\\.at_at.*"
+                      "clojure\\.core\\.cache.*"
+                      "clojure\\.core\\.memoize.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
                       "cheshire.*"
