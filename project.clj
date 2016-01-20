@@ -7,7 +7,7 @@
   :url "http://github.com/containium/containium"
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[boxure/clojure "1.7.0"]
+  :dependencies [[boxure/clojure "1.8.0"]
                  [boxure "0.1.0-SNAPSHOT"]
                  [jline "2.12.1"]
                  [ring/ring-core "1.3.2"]
