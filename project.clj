@@ -49,7 +49,8 @@
   :auto-clean false
   :main containium.starter
   :profiles {:doc {:dependencies [[codox/codox.core "0.6.6" :exclusions [org.clojure/clojure]]]}
-             :aot {:aot [containium.core]}
+             :aot {:aot [containium.core]
+                   :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}
              ;; These :test dependencies are to make POM generation work...
              :test {:dependencies [
                       [org.clojure/tools.nrepl "0.2.10" :scope "compile"]
