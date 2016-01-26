@@ -40,6 +40,9 @@
   (:import [java.io PrintStream OutputStream]))
 
 
+(def ^:private stdout (System/out))
+(def ^:private linesep (System/getProperty "line.separator"))
+
 ;;; Public API for apps
 
 (defprotocol Logging
@@ -72,7 +75,7 @@
          (log-console ~app-logger ~level ~ns (apply str (interpose " " vals#)))))))
 
 
-(doseq [level timbre/levels-ordered]
+(doseq [level timbre/ordered-levels]
   (eval `(defmacro ~(symbol (name level))
            ~(str "Log the given values on the " (name level) " level." \newline
                  "  If the first value is a Throwable, then only the stacktrace" \newline
@@ -185,7 +188,7 @@
          (~fn ~app-logger ~level ~ns (apply str (interpose " " vals#)))))))
 
 
-(doseq [level timbre/levels-ordered
+(doseq [level timbre/ordered-levels
         fn ["all" "command"]]
   (eval `(defmacro ~(symbol (str (name level) "-" fn))
            ~(str "Log the given values on the " (name level) " level to " fn "." \newline
@@ -232,12 +235,15 @@
 (defn mk-appender
   [sessions-atom ^String prefix log-writer]
   {:timestamp-pattern "yyyy-MM-dd HH:mm:ss,SSS"
+   :level :debug
    :appenders
    {:containium
     {:enabled? true
      :async? false
-     :fn (fn [{:keys [args timestamp level throwable]}]
-           (let [message (or throwable (first args))
+     :min-level nil
+     :output-fn :inherit
+     :fn (fn [{:keys [vargs_ instant level ?err_ output-fn] :as in}]
+           (let [message (output-fn in)  #_(or @?err_ @(first vargs_))
                  level (apply style (format "%5S" (name level)) (get levels level))
                  raw? (and (map? message) (::raw message))
                  ^String ns (or (and (map? message) (::ns message)) nil)
@@ -257,7 +263,7 @@
                                                                     (count colors)))) t)
                                 t)
                               (if (or ns prefix) (str "[" t) t)
-                              (str timestamp " " level " " t))
+                              (str instant " " level " " t))
                         (str message))]
              (when log-writer
                (when (satisfies? LogWriter log-writer)
@@ -282,18 +288,18 @@
       (reify AppLogger
         (log-console [_ level msg]
           (if-let [log-level (get @levels app-name)]
-            (timbre/with-log-level log-level (timbre/log appender level msg))
-            (timbre/log appender level msg)))
+            (timbre/with-log-level log-level (timbre/log* appender level msg))
+            (timbre/log* appender level msg)))
         (log-console [_ level ns msg]
           (if-let [log-level (get @levels app-name)]
-            (timbre/with-log-level log-level (timbre/log appender level {::ns ns ::msg msg}))
-            (timbre/log appender level {::ns ns ::msg msg}))))))
+            (timbre/with-log-level log-level (timbre/log* appender level {::ns ns ::msg msg}))
+            (timbre/log* appender level {::ns ns ::msg msg}))))))
 
   AppLogger
   (log-console [_ level msg]
-    (timbre/log console-appender level msg))
+    (timbre/log* console-appender level msg))
   (log-console [_ level ns msg]
-    (timbre/log console-appender level {::ns ns ::msg msg}))
+    (timbre/log* console-appender level {::ns ns ::msg msg}))
 
   SystemLogger
   (add-session [_ log-writer]
@@ -307,13 +313,13 @@
           command-appender (mk-appender nil command log-writer)]
       (reify CommandLogger
         (log-command [_ level msg]
-          (timbre/log command-appender level msg))
+          (timbre/log* command-appender level msg))
         (log-command [_ level ns msg]
-          (timbre/log command-appender level {::ns ns ::msg msg}))
+          (timbre/log* command-appender level {::ns ns ::msg msg}))
         (log-all [_ level msg]
-          (timbre/log all-appender level msg))
+          (timbre/log* all-appender level msg))
         (log-all [_ level ns msg]
-          (timbre/log all-appender level {::ns ns ::msg msg}))
+          (timbre/log* all-appender level {::ns ns ::msg msg}))
         (done [_]
           (when done-fn (done-fn true)))
         (done [_ success?]
@@ -324,9 +330,6 @@
   (set-level [this app-name level]
     (swap! levels assoc app-name level)))
 
-
-(def ^:private stdout (System/out))
-(def ^:private linesep (System/getProperty "line.separator"))
 
 (defn- bytes->string
   [^bytes bytes off len]
