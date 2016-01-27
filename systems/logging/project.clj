@@ -2,13 +2,13 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(defproject containium.systems/logging "0.1.0-SNAPSHOT"
+(defproject containium.systems/logging "0.1.0"
   :description "Containium Logging System"
   :url "http://containium.org"
   :scm {:dir "../../"}
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[containium.systems/config "0.1.0-SNAPSHOT"]
+  :dependencies [[containium.systems/config "0.1.0"]
                  [com.taoensso/timbre "4.2.1"]
                  [myguidingstar/clansi "1.3.0"]
                 ]

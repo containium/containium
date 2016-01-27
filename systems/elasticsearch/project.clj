@@ -2,13 +2,13 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(defproject containium.systems/elasticsearch "0.1.0-SNAPSHOT"
+(defproject containium.systems/elasticsearch "0.1.0"
   :description "ElasticSearch Containium System"
   :url "http://containium.org"
   :scm {:dir "../../"}
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[containium.systems/logging "0.1.0-SNAPSHOT"]
+  :dependencies [[containium.systems/logging "0.1.0"]
                  [org.elasticsearch/elasticsearch "1.7.3"]
                  [org.codehaus.groovy/groovy-all "2.4.0"] ;; To enable groovy scripts in ElasticSearch
                  [clojurewerkz/elastisch "2.1.0" :exclusions [clj-http]]

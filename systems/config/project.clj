@@ -2,13 +2,13 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(defproject containium.systems/config "0.1.0-SNAPSHOT"
+(defproject containium.systems/config "0.1.0"
   :description "Containium Configuration System"
   :url "http://containium.org"
   :scm {:dir "../../"}
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[containium.systems/core "0.1.0-SNAPSHOT"]]
+  :dependencies [[containium.systems/core "0.1.0"]]
   :java-source-paths ["src-java"]
   :global-vars {*warn-on-reflection* true}
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.7.1"
