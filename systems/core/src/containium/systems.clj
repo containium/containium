@@ -23,7 +23,7 @@
   (stop [this]))
 
 
-(defn- start-systems
+(defn start-systems
   [system-components]
   (loop [to-start system-components
          started nil]
@@ -40,10 +40,10 @@
           (do (println "Exception while starting system component" name "-" result)
               (.printStackTrace ^Throwable result)
               [started result])))
-      [started nil])))
+      [(into {} started) nil])))
 
 
-(defn- stop-systems
+(defn stop-systems
   [started-components]
   (doseq [[name system] started-components]
     (when (satisfies? Stoppable system)
