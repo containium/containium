@@ -30,6 +30,7 @@
                   :log.dir "target/kafka-log"
                   :zookeeper.connect "localhost"}}
  :elasticsearch {:wait-for-yellow-secs 300}
+ :logger {:override :both} ; See: containium.systems.logging/override-std
  :modules {:resolve-dependencies true
            :isolates [;"containium.*"
                       "containium\\.utils.*"
