@@ -107,15 +107,17 @@
   (try (require 'taoensso.timbre)
        ;; Make sure all logging statements arrive in the AppLogger, which will check whether it
        ;; should be logged itself.
-       (taoensso.timbre/set-config! :current-level :trace)
-       (taoensso.timbre/set-config!
-        :appenders
-        {:overtaken
-         {:enabled? true
-          :async? false
-          :fn (fn [{:keys [args level throwable ns]}]
-                (log-console app-logger level ns (or throwable
-                                                     (apply str (interpose " " args)))))}})
+       (taoensso.timbre/merge-config!
+        {:current-level :trace
+         :appenders
+          {:overtaken
+           {:enabled? true
+            :async? false
+            :output-fn :inherit
+            :fn (fn [{:keys [vargs_ level throwable ns] :as in}]
+                  ;(.println stdout (str 'overtake-logging ": " in))
+                  (log-console app-logger level ns (or throwable
+                                                       (apply str (interpose " " @vargs_)))))}}})
        (info app-logger "Timbre logging is configured to use the supplied containiums's AppLogger.")
        (catch Exception ex
          (debug app-logger "Could not configure Timbre logging to use AppLogger:" ex))))
@@ -242,8 +244,8 @@
      :async? false
      :min-level nil
      :output-fn :inherit
-     :fn (fn [{:keys [vargs_ instant level ?err_ output-fn] :as in}]
-           (let [message (output-fn in)  #_(or @?err_ @(first vargs_))
+     :fn (fn [{:keys [vargs_ instant level ?err_] :as in}]
+           (let [message (or @?err_ (first @vargs_))
                  level (apply style (format "%5S" (name level)) (get levels level))
                  raw? (and (map? message) (::raw message))
                  ^String ns (or (and (map? message) (::ns message)) nil)
