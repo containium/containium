@@ -145,7 +145,7 @@
       (let [elastic (systems/require-system Elastic systems)
             logger (systems/require-system SystemLogger systems)]
         (info logger "Starting Analytics based on ElasticSearch...")
-        (let [client (.client (es-system/node elastic))
+        (let [client (es-system/client elastic)
               atat (at/mk-pool)
               elastic-ring-analytics (ElasticAnalytics. client logger atat)]
           (put-template client)

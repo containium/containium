@@ -29,7 +29,7 @@
                   :replica.fetch.max.bytes 16777216
                   :log.dir "target/kafka-log"
                   :zookeeper.connect "localhost"}}
- :elastic {}
+ :elasticsearch {:wait-for-yellow-secs 300}
  :modules {:resolve-dependencies true
            :isolates [;"containium.*"
                       "containium\\.utils.*"

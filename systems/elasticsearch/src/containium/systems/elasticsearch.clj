@@ -5,8 +5,10 @@
 (ns containium.systems.elasticsearch
   (:require [containium.systems :refer (require-system)]
             [containium.systems.config :refer (Config get-config)]
-            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)])
+            [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]
+            [clojurewerkz.elastisch.native :as es])
   (:import [containium.systems Startable Stoppable]
+           [org.elasticsearch.client Client]
            [org.elasticsearch.node Node NodeBuilder]
            [org.elasticsearch.client ClusterAdminClient]
            [org.elasticsearch.action ActionFuture]
@@ -18,43 +20,28 @@
 ;;; The public API for Elastic systems.
 
 (defprotocol Elastic
-  (^org.elasticsearch.node.Node node [this]
-    "Returns the Node object used connecting.")) ;;---TODO: Is this a good API?
-
-
-;;; The embedded implementation.
-
-;; (def stop-monitor (atom false))
-
-;; (defn- monitor
-;;   []
-;;   (println "[!!] ES monitor started.")
-;;   (loop [stop? @stop-monitor
-;;          last ""]
-;;     (if-not stop?
-;;       (let [new (slurp "http://localhost:9200/_cluster/health")]
-;;         (when (not= new last)
-;;           (println "[!!] health:" new))
-;;         (Thread/sleep 25)
-;;         (recur @stop-monitor new))
-;;       (println "[!!] ES monitor stopped."))))
+  (^Client client [this]
+    "Returns the Client object usable for querying.")
+  (^Node node [this]
+    "Returns the Node object when running embedded."))
 
 
 (defn- wait-until-started
   "Wait until elastic node/cluster is ready."
-  [^Node node timeout-secs]
+  [^Client client timeout-secs]
   (let [^ClusterHealthRequest chr (.. (ClusterHealthRequest. (make-array String 0))
                                       (timeout (str timeout-secs "s"))
                                       waitForYellowStatus)
-        ^ClusterAdminClient admin (.. node client admin cluster)
+        ^ClusterAdminClient admin (.. client admin cluster)
         ^ActionFuture fut (.health admin chr)
         ^ClusterHealthResponse resp (.actionGet fut)]
     (not (.isTimedOut resp))))
 
 
-(defrecord EmbeddedElastic [^Node node logger]
+(defrecord ElasticNode [^Node node logger]
   Elastic
   (node [_] node)
+  (client [_] (.client node))
 
   Stoppable
   (stop [_]
@@ -63,17 +50,51 @@
     ;; (reset! stop-monitor true)
     (info logger "Embedded ElasticSearch node stopped.")))
 
+(defrecord ElasticClient [^Client client logger]
+  Elastic
+  (node [_] nil)
+  (client [_] client)
+
+  Stoppable
+  (stop [_]
+    (info logger "Stopping ElasticSearch client...")
+    (.close client)
+    ;; (reset! stop-monitor true)
+    (info logger "ElasticSearch client stopped.")))
+
+
+(defn- es-config [systems dissoc-key]
+  (-> (require-system Config systems)
+      (get-config :elasticsearch)
+      (dissoc :client)
+      (update-in [:wait-for-yellow-secs] #(or % 300))))
 
 (def embedded
   (reify Startable
     (start [_ systems]
-      (let [config (get-config (require-system Config systems) :elastic)
+      (let [{:keys [wait-for-yellow-secs] :as config} (es-config systems :transport-client)
             logger (require-system SystemLogger systems)
-            _ (info logger "Starting embedded ElasticSearch node, using config" config "...")
+            _ (info logger "Starting embedded ElasticSearch node, using config:" config "...")
             node (.node (NodeBuilder/nodeBuilder))]
-        ;; (-> (Thread. monitor) .start)
         (info logger "Waiting for Embedded ElasticSearch node to have initialised.")
-        (when-not (wait-until-started node (or (:wait-for-yellow-secs config) 300))
-          (throw (Exception. "Could not initialise ES within 300 seconds.")))
+        (when-not (wait-until-started (.client node) wait-for-yellow-secs)
+          (throw (Exception. (str "Cluster not ready within " wait-for-yellow-secs " seconds."))))
         (info logger "Embedded ElasticSearch node started.")
-        (EmbeddedElastic. node logger)))))
+        (ElasticNode. node logger)))))
+
+(def connection
+  (reify Startable
+    (start [_ systems]
+      (let [{:keys [wait-for-yellow-secs] :as config} (es-config systems :embedded)
+            logger (require-system SystemLogger systems)
+            _ (info logger "Starting ElasticSearch transport client, using config:" config "...")
+            {:keys [hosts settings]} (:transport-client config)
+            client (apply es/connect (cond (and hosts settings) [hosts settings]
+                                           settings             [["localhost" 9300] settings]
+                                           hosts                [hosts {"cluster.name" "elasticsearch"}]
+                                           :else                nil))]
+        (info logger "Waiting for ElasticSearch client to have initialised.")
+        (when-not (wait-until-started client wait-for-yellow-secs)
+          (throw (Exception. (str "Cluster not ready within " wait-for-yellow-secs " seconds."))))
+        (info logger "ElasticSearch client started.")
+        (ElasticClient. client logger)))))
