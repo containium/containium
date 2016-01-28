@@ -2,7 +2,7 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(defproject containium.systems/elasticsearch "0.1.0"
+(defproject containium.systems/elasticsearch "0.1.1"
   :description "ElasticSearch Containium System"
   :url "http://containium.org"
   :scm {:dir "../../"}
@@ -15,6 +15,7 @@
                  [org.clojars.touch/elasticsearch-lang-clojure "0.2.0-SNAPSHOT"]
                 ]
   :java-source-paths ["src-java"]
+  :javac-options ["-target" "1.7" "-source" "1.7" "-Xlint:-options"]
   :global-vars {*warn-on-reflection* true}
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.7.1"
                  {:extensions "true"
