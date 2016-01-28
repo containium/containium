@@ -22,17 +22,41 @@
 (refer-logging)
 
 
+;;; Utils
+
+(defn- dissoc!-body [map _]
+  (dissoc! map :body))
+
+
 ;;; The public system API.
 
 (defprotocol Analytics
-  (wrap-ring-analytics [this app-name handler]
+  (wrap-ring-analytics
+    [this app-name handler]
+    [this app-name request-filter response-filter handler]
     "Returns a handler that stores the given request, using the given
     app name for the log name. The body is not read by this
-    middleware."))
+    middleware.
+
+    Before storing the request+response, request-filter and response-filter
+    are called with 2 arguments: the corresponding transient map and the
+    opposite (persistent) map, as such:
+    - `(request-filter  (transient request)  response)`
+    - `(response-filter (transient response) request)`
+
+    Both filters functions must return a transient map.
+
+    This allows removal of sensitive or uninteresting data before storing.
+    When no filters are provided, a default filter that removes :body is used."))
+
+
+;;; No-analytics (nil system) implementation
 
 (extend-type nil
   Analytics
-  (wrap-ring-analytics [this app-name handler] handler))
+  (wrap-ring-analytics
+    ([this app-name handler] handler)
+    ([this app-name request-filter response-filter handler] handler)))
 
 
 ;;; ElasticSearch implementation.
@@ -50,26 +74,29 @@
 
 
 (defn- wrap-ring-analytics*
-  [{:keys [client logger] :as record} app-name handler]
+  [{:keys [client logger] :as record} app-name request-filter response-filter handler]
   (fn [request]
     (let [started (System/currentTimeMillis)
           response (try (handler request)
                         (catch Throwable t (ex/exit-when-fatal t) t))
           took (- (System/currentTimeMillis) started)
-          processed (-> request
-                        (dissoc :body :async-channel)
-                        (assoc :started (time/format (time/datetime started)
-                                                     :date-hour-minute-second-ms)
-                               :response (if (instance? Throwable response)
-                                           {:message (.getMessage ^Throwable response)
-                                            :stacktrace (with-out-str
-                                                          (print-cause-trace response))
-                                            :class (str (class response))
-                                            :status 500
-                                            :took took}
-                                           (-> response
-                                               (dissoc :body)
-                                               (assoc :took took)))))]
+          processed (-> (transient request)
+                        (request-filter response)
+                        (dissoc! :async-channel)
+                        (assoc! :started (time/format (time/datetime started)
+                                                      :date-hour-minute-second-ms)
+                                :response (if (instance? Throwable response)
+                                            {:message (.getMessage ^Throwable response)
+                                             :stacktrace (with-out-str
+                                                           (print-cause-trace response))
+                                             :class (str (class response))
+                                             :status 500
+                                             :took took}
+                                            (-> (transient response)
+                                                (assoc! :took took)
+                                                (response-filter request)
+                                                (persistent!))))
+                        (persistent!))]
       (try (store-request client app-name processed)
            (catch Throwable t
              (ex/exit-when-fatal t)
@@ -131,7 +158,10 @@
 (defrecord ElasticAnalytics [client logger atat]
   Analytics
   (wrap-ring-analytics [this app-name handler]
-    (wrap-ring-analytics* this app-name handler))
+    (wrap-ring-analytics* this app-name, dissoc!-body   dissoc!-body    handler))
+  (wrap-ring-analytics [this app-name request-filter response-filter handler]
+    (wrap-ring-analytics* this app-name, request-filter response-filter handler))
+
   Stoppable
   (stop [this]
     (info logger "Stopping Analytics based on ElasticSearch.")
