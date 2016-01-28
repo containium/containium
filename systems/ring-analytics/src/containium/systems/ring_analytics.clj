@@ -114,8 +114,7 @@
     }
     :mappings {:request {:properties {"started" {:type "date"
                                                  :format "date_hour_minute_second_millis"}}
-                                     :_source {:excludes ["params.password"
-                                                          "form-params.password"]}}}
+                                     :_source {:excludes ["*.*password*"]}}}
     :content-type :smile, :create? false))
 
 
