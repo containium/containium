@@ -62,13 +62,13 @@
 ;;; ElasticSearch implementation.
 
 (defn- daily-index
-  [app]
-  (str "log-" (lower-case app) "-" (time/format (time/today) :basic-date)))
+  [app started-utc-ms]
+  (str "log-" (lower-case app) "-" (time/format (time/datetime started-utc-ms) :basic-date)))
 
 
 (defn- store-request
-  [client app-name request]
-  (es/index client (cnv/->index-request (daily-index app-name)
+  [client app-name started-utc-ms request]
+  (es/index client (cnv/->index-request (daily-index app-name started-utc-ms)
                                         "request" request
                                         {:op-type "create", :content-type :smile})))
 
@@ -97,7 +97,7 @@
                                                 (response-filter request)
                                                 (persistent!))))
                         (persistent!))]
-      (try (store-request client app-name processed)
+      (try (store-request client app-name started processed)
            (catch Throwable t
              (ex/exit-when-fatal t)
              (error logger "Failed to store request for ring-analytics:")
