@@ -18,8 +18,9 @@
             [clojure.stacktrace :refer (print-cause-trace)]
             [overtone.at-at :as at])
   (:import [org.elasticsearch.client Client]
+           [org.elasticsearch.action.support IndicesOptions]
            [org.elasticsearch.action.admin.cluster.state ClusterStateResponse]
-           [org.elasticsearch.cluster.metadata IndexMetaData]))
+           [org.elasticsearch.cluster.metadata IndexMetaData IndexMetaData$State]))
 (refer-logging)
 
 
@@ -118,40 +119,60 @@
                                      :_source {:excludes ["*.*password*"]}}}
     :content-type :smile, :create? false))
 
+(defn- process-index-before-closing! [client logger delete-day optimize-day close-day
+                                      ^IndexMetaData index-meta]
+  (let [index (.index index-meta)
+        created (-> (.creationDate index-meta) time/datetime)]
+    (cond
+      (time/< created delete-day)
+      (do
+        (info logger "Deleting index:" index)
+        ;(esindex/delete client index)
+        nil)
+
+      (and (time/< created    close-day)
+           (= IndexMetaData$State/OPEN (.getState index-meta)))
+      index
+
+      (and (time/< created optimize-day)
+           (= IndexMetaData$State/OPEN (.getState index-meta)))
+      (do
+        ;;---TODO Find out if already optimized
+        (info logger "Optimizing index:" index)
+        (esindex/optimize client index :max-num-segments 1)
+        nil)
+
+      :else ;; do nothing and don't close
+      nil)))
 
 (defn- indices-operations
   "Optimizes and closes log-* indices. One can specify the days after
   which the operations should take place."
   [{:keys [^Client client logger] :as elastic-ring-analytics}
-   {:keys [optimize-after close-after] :or {optimize-after 2 close-after 7}}]
-  (info logger "Optimizing:" optimize-after " days or older; and Closing:" close-after " days or older log indices...")
+   {:keys [delete-after optimize-after close-after] :or {delete-after 3650, optimize-after 2, close-after 7}}]
+  (info logger "Deleting:" delete-after "days or older; Optimizing:" optimize-after "days or older; and Closing:" close-after "days or older log indices...")
   (try
-    (let [metas (let [request (.. client admin cluster prepareState (setMetaData true)
+    (let [metas (let [request (.. client admin cluster prepareState
+                                  (setMetaData true)
+                                  (setIndicesOptions (IndicesOptions/fromOptions #_ignoreUnavailable true, #_allowNoIndices true, #_expandToOpenIndices true, #_expandToClosedIndices true))
                                   (setIndices (into-array String ["log-*"]))
                                   request)
                       ^ClusterStateResponse response (.. client admin cluster (state request) get)]
                   (.. response getState metaData indices))
           today (time/today)
           optimize-day (time/add-days today (- optimize-after))
+          delete-day (time/add-days today (- delete-after))
           close-day (time/add-days today (- close-after))
-          to-close (keep (fn [^IndexMetaData index-meta]
-                           (let [index (.index index-meta)
-                                 created (-> (.creationDate index-meta) time/datetime)]
-                             (if (time/< created close-day)
-                               index
-                               (when (time/< created optimize-day)
-                                 ;;---TODO Find out if already optimized
-                                 (info logger "Optimizing index:" index)
-                                 (esindex/optimize client index :max-num-segments 1)
-                                 nil))))
+          to-close (keep (partial process-index-before-closing!
+                                  client logger delete-day optimize-day close-day)
                          (iterator-seq (.valuesIt metas)))]
       (when (seq to-close)
         (info logger "Closing indices:" (vec to-close))
         (esindex/flush client to-close)
         (esindex/close client (into-array String to-close))))
-    (info logger "Done optimizing and closing old ring-analytics logs.")
+    (info logger "Done deleting, optimizing and closing old ring-analytics logs.")
     (catch Exception e
-      (error logger "Error optimizing and closing old ring-analytics logs.")
+      (error logger "Error while deleting, optimizing and closing old ring-analytics logs:")
       (error logger e))))
 
 
