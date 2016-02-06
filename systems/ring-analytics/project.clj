@@ -2,7 +2,7 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-(defproject containium.systems/ring-analytics "0.3.1"
+(defproject containium.systems/ring-analytics "0.3.2"
   :description "Ring requests and responses stored in ElasticSearch for use with Kibana"
   :url "http://containium.org"
   :scm {:dir "../../"}
