@@ -4,8 +4,9 @@
 
 (ns containium.systems.ring-analytics
   "Analytics is a system that can store ring requests."
-  (:require [containium.systems :as systems :refer (Startable Stoppable)]
+  (:require [containium.systems :as systems :refer (require-system Startable Stoppable)]
             [containium.systems.elasticsearch :as es-system :refer (Elastic)]
+            [containium.systems.config :refer (Config get-config)]
             [containium.systems.logging :as logging :refer (SystemLogger refer-logging)]
             [containium.exceptions :as ex]
             [simple-time.core :as time]
@@ -123,7 +124,7 @@
   which the operations should take place."
   [{:keys [^Client client logger] :as elastic-ring-analytics}
    {:keys [optimize-after close-after] :or {optimize-after 2 close-after 7}}]
-  (info logger "Optimizing and closing old ring-analytics logs...")
+  (info logger "Optimizing:" optimize-after " days or older; and Closing:" close-after " days or older log indices...")
   (try
     (let [metas (let [request (.. client admin cluster prepareState (setMetaData true)
                                   (setIndices (into-array String ["log-*"]))
@@ -171,15 +172,16 @@
 (def elasticsearch
   (reify Startable
     (start [this systems]
-      (let [elastic (systems/require-system Elastic systems)
-            logger (systems/require-system SystemLogger systems)]
-        (info logger "Starting Analytics based on ElasticSearch...")
+      (let [config (get-config (require-system Config systems) :ring-analytics)
+            logger (require-system SystemLogger systems)
+            elastic (require-system Elastic systems)]
+        (info logger "Starting Analytics based on ElasticSearch..." config)
         (let [client (es-system/client elastic)
               atat (at/mk-pool)
               elastic-ring-analytics (ElasticAnalytics. client logger atat)]
           (put-template client)
           (at/every (* 1000 60 60 24) ; 24 hours
-                    (partial indices-operations elastic-ring-analytics nil) atat
+                    (partial indices-operations elastic-ring-analytics config) atat
                     :initial-delay (* 1000 60 10)) ; 10 minutes
           (info logger "Started Analytics based on ElasticSearch.")
           elastic-ring-analytics)))))
