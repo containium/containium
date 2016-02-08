@@ -127,7 +127,7 @@
       (time/< created delete-day)
       (do
         (info logger "Deleting index:" index)
-        ;(esindex/delete client index)
+        (esindex/delete client index)
         nil)
 
       (and (time/< created    close-day)
