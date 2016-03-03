@@ -33,11 +33,12 @@
  :logger {:override :both} ; See: containium.systems.logging/override-std
  :modules {:resolve-dependencies true
            :isolates [;"containium.*"
-                      "containium\\.utils.*"
-                      "taoensso\\.nippy.*"
-                      "taoensso\\.timbre.*"
-                      "taoensso\\.encore.*"
-                      "ring\\.(?!middleware).*"
+                      "containium[./]utils.*"
+                      "taoensso[./]nippy.*"
+                      "taoensso[./]truss.*"
+                      "taoensso[./]timbre.*"
+                      "taoensso[./]encore.*"
+                      "ring[./](?!middleware).*"
                       "leiningen.*"
                       "robert.hooke"
                       "cemerick.pomegranate.*"
@@ -46,20 +47,22 @@
                       "simple_time.*"
                       "postal.*"
                       "clj_http.*"
-                      "overtone\\.at_at.*"
-                      "clojure\\.core\\.cache.*"
-                      "clojure\\.core\\.memoize.*"
+                      "overtone[./]at_at.*"
+                      "clojure[./]core[./]cache.*"
+                      "clojure[./]core[./]memoize.*"
                       ;; Analytics deps
                       "clj_elasticsearch.*"
+                      "clojurewerkz[./]elastisch.*"
+                      "com[./]thelastcitadel[./]es.*"
                       "cheshire.*"
                       "gavagai.*"
                       ;; Prime middleware deps
-                      "prime\\.session.*"
-                      "ring\\.util.*"
+                      "prime[./]session.*"
+                      "ring[./]util.*"
                       "noir.*"
                       ;; Packthread deps
                       "packthread.*"
-                      "clojure\\.core\\.match.*"
+                      "clojure[./]core[./]match.*"
                       ;; Alia system deps
                       "qbits.*"
                       "cljs.core.async.*"
@@ -70,10 +73,10 @@
                       "flatland.*"
                       "useful.*"
                       "clj_tuple.*"
-                      "riddley\\.(?!Util).*"
+                      "riddley[./](?!Util).*"
                       ;; The http-kit AsyncChannel is not isolated because of pubsure-reader app.
                       ;; Keep this in mind when seeking leaks. :)
-                      ;;"org\\.httpkit\\.(?!server\\.AsyncChannel).*"
+                      ;;"org[./httpkit[./(?!server[./AsyncChannel).*"
                       ;; lighttable-nrepl deps
                       "clj_stacktrace.*"
                       "fs.*"

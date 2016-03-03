@@ -71,7 +71,7 @@
               box (boxure (assoc boxure-config :debug? box-debug) (.getClassLoader clojure.lang.RT) file)
               injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
                                                           (str "containium\\.(?!core|utils).*"
-                                                               "|clojure.(java|xml|zip).*"
+                                                               "|clojure.(java|xml).*"
                                                                "|ring\\.middleware.*"
                                                                "|ring\\.util\\.codec.*"
                                                                "|org\\.httpkit.*"
