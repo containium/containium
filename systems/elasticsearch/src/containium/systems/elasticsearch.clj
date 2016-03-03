@@ -20,9 +20,9 @@
 ;;; The public API for Elastic systems.
 
 (defprotocol Elastic
-  (^Client client [this]
+  (^org.elasticsearch.client.Client client [this]
     "Returns the Client object usable for querying.")
-  (^Node node [this]
+  (^org.elasticsearch.node.Node node [this]
     "Returns the Node object when running embedded."))
 
 
