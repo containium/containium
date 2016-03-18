@@ -17,26 +17,6 @@
 
 (defonce systems nil)
 
-(defmacro eval-in
-  "Evaluate the given `forms` (in an implicit do) in the module identified by `name`."
-  [name & forms]
-
-  (let [box @(get @(get-in systems [:modules :agents]) name)]
-    (assert box (str "Module not found: " name))
-    `(boxure.core/eval (:box @(get @(get-in systems [:modules :agents]) ~name))
-                        '(try (do ~@forms)
-                              (catch Throwable e# (do (.printStackTrace e#) e#))))))
-
-(defmacro command
-  "Call console commands from the REPL. For example:
-  (command module versions foo)."
-  [cmd & args]
-  (let [cmd (str cmd)
-        args (mapv str args)]
-    `(print (with-out-str
-              (handle-command ~cmd ~args systems
-                              (logging/stdout-command-logger (:logging systems) ~cmd))))))
-
 
 
 ;;; Command loop.

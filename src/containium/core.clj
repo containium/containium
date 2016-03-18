@@ -21,6 +21,7 @@
             [containium.systems.logging :as logging :refer (refer-logging)]
             [containium.exceptions :as ex]
             [containium.reactor :as reactor]
+            [containium.repl]
             [clojure.java.io :refer (resource as-file)]
             [clojure.tools.nrepl.server :as nrepl])
   (:gen-class))
@@ -28,7 +29,7 @@
 
 
 ;; Convenience alias
-(def ^:macro eval-in #'containium.reactor/eval-in)
+(def ^:macro eval-in #'containium.repl/eval-in)
 (alter-meta! #'eval-in assoc :macro true) ; Clojure wart...
 
 

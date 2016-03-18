@@ -72,6 +72,8 @@
               injected (boxure/eval box '(let [injected (clojure.lang.Namespace/injectFromRoot
                                                           (str "containium\\.(?!core|utils).*"
                                                                "|clojure.(java|xml).*"
+                                                               "|complete.core.*"
+                                                               "|user"
                                                                "|ring\\.middleware.*"
                                                                "|ring\\.util\\.codec.*"
                                                                "|org\\.httpkit.*"
