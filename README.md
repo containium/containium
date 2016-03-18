@@ -180,9 +180,8 @@ Using this file, one can influence what is in the `:containium` configuration, e
 
 ### Command line
 
-When running Containium as an application, one enters a command loop after the root systems have started. It is here where one cae, among other things, manage deployments or start a REPL. Type `help` to get an overview of the available commands.
+When running Containium as an application, one enters a command loop after the root systems have started.
+It is here where one can, among other things, manage deployments or start a REPL. Type `help` to get an overview of the available commands.
 
-
-### Developing systems
-
-1. When the system is used inside modules, add protocol to `keyword->protocol` local inside the `forward-systems` function of the `containium.systems` namespace.
+After connecting to the REPL (default port 13337, see project.clj) with a client, one can evaluate code in the `ROOT` context (the Reactor) or switch into deployed applications.
+See the [`containium.repl`](https://github.com/containium/containium/blob/master/src/containium/repl.clj) namespace for all available helper functions.
