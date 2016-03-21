@@ -373,7 +373,7 @@
   (reify Startable
     (start [this systems]
       (let [sessions-atom (atom #{stdout})
-            override (-> (:config systems) (get-config :logger) (:override :none))
+            override (or (some-> (:config systems) (get-config :logger) :override) :none)
             logger (Logger. sessions-atom (atom {}) (mk-appender sessions-atom nil nil))]
         (when-not (= :none override)
           (override-std logger override))
