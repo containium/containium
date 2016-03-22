@@ -94,7 +94,8 @@
                                              :class (str (class response))
                                              :status 500
                                              :took took}
-                                            (-> (transient response)
+                                            (-> (if (map? response) response, {:body response})
+                                                (transient)
                                                 (assoc! :took took)
                                                 (response-filter request)
                                                 (persistent!))))
