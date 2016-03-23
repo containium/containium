@@ -15,7 +15,7 @@
 
 ;;; Globals for REPL access. A necessary evil.
 
-(defonce systems nil)
+(defonce ^:redef systems nil)
 
 
 
