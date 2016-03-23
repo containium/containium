@@ -17,7 +17,7 @@
                  [http-kit "2.1.19"]
                  [org.apache.httpcomponents/httpclient "4.5"]
                  [org.apache.cassandra/cassandra-all "2.2.5"
-                  :exclusions [com.google.guava/guava com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty org.apache.commons/commons-lang3]]
+                  :exclusions [com.google.guava/guava com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty io.dropwizard.metrics/metrics-core]]
                  ;[com.google.guava/guava "15.0"] ;; Cassandra still requires Guava 15
                  [org.yaml/snakeyaml "1.15"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
@@ -33,7 +33,8 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.8.5"]
-                 [cc.qbits/alia "2.7.4" :exclusions [org.clojure/core.async com.codahale.metrics/metrics-core]]
+                 [cc.qbits/alia "3.1.3"]
+                 [org.apache.commons/commons-lang3 "3.4"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [simple-time "0.2.0"]
                  [com.maitria/packthread "0.1.6"]
