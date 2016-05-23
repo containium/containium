@@ -18,6 +18,7 @@
            [org.apache.cassandra.cql3.statements ParsedStatement$Prepared]
            [org.apache.cassandra.service CassandraDaemon QueryState]
            [org.apache.cassandra.transport.messages ResultMessage$Rows]
+           [org.apache.cassandra.serializers LongSerializer]
            [java.util List Map Set UUID Date]
            [java.net InetAddress]
            [java.nio CharBuffer ByteBuffer]
@@ -60,7 +61,19 @@
       (->> (for [[^ColumnSpecification meta ^ByteBuffer column] (zipmap metas row)
                  :let [^AbstractType type (.type meta)
                        ^String name (.. meta name toString)]]
-             [(if keywordize? (keyword name) #_else name) (clojurify (.compose type column))])
+             [(if keywordize? (keyword name) #_else name)
+              (cond
+                (nil? column)
+                nil
+
+                (not (and (.isCounter type) (<= (.limit column) 8)))
+                (clojurify (.compose type column))
+
+                ;; Taken from org.apache.cassandra.hadoop.pigCassandraStorage:
+                ;; "treat counters like longs, specifically CCT.compose is not what we need"
+                :else
+                (. (LongSerializer/instance) (deserialize column)))
+             ])
            (into {})))))
 
 
