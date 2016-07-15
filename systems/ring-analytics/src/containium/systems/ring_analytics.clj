@@ -94,8 +94,13 @@
                                              :class (str (class response))
                                              :status 500
                                              :took took}
-                                            (-> (if (map? response) response, {:body response})
+                                            (-> (if (and (map? response) (:status response))
+                                                  response
+                                                  {:body response})
                                                 (transient)
+                                                (assoc! :body (if (string? (:body response))
+                                                                (:body response)
+                                                                (str "Stringified: " (:body response))))
                                                 (assoc! :took took)
                                                 (response-filter request)
                                                 (persistent!))))
