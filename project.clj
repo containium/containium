@@ -14,7 +14,7 @@
                  [org.clojure/tools.reader "0.10.0"]
                  [clj-time "0.9.0"]
                  [joda-time "2.8.1"]
-                 [http-kit "2.1.19"]
+                 [http-kit "2.2.0"]
                  [org.apache.httpcomponents/httpclient "4.5"]
                  [org.apache.cassandra/cassandra-all "2.2.6"
                   :exclusions [com.google.guava/guava com.thinkaurelius.thrift/thrift-server org.yaml/snakeyaml io.netty/netty io.dropwizard.metrics/metrics-core]]
