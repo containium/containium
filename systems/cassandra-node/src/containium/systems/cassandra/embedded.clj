@@ -42,6 +42,9 @@
     :all ConsistencyLevel/ALL
     :local-quorum ConsistencyLevel/LOCAL_QUORUM
     :each-quorum ConsistencyLevel/EACH_QUORUM
+    :serial ConsistencyLevel/SERIAL
+    :local-serial ConsistencyLevel/LOCAL_SERIAL
+    :local-one ConsistencyLevel/LOCAL_ONE
     nil))
 
 
