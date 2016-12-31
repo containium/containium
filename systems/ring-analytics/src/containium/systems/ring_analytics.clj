@@ -29,6 +29,12 @@
 (defn- dissoc!-body [map _]
   (dissoc! map :body))
 
+(defn- assoc!-string-body [{:keys [body] :as map}]
+  (if (or (nil? body) (string? body))
+    map
+   ;else
+    (assoc! map :body (str "Stringified: " body))))
+
 
 ;;; The public system API.
 
@@ -94,15 +100,16 @@
                                              :class (str (class response))
                                              :status 500
                                              :took took}
-                                            (-> (if (and (map? response) (:status response))
+                                           ;else, regular request:
+                                            (-> (if (map? response)
                                                   response
-                                                  {:body response})
+                                                 ;else, wrap in map:
+                                                  {:body response
+                                                   :status (if (nil? response) 404 #_else 200)})
                                                 (transient)
-                                                (assoc! :body (if (string? (:body response))
-                                                                (:body response)
-                                                                (str "Stringified: " (:body response))))
                                                 (assoc! :took took)
                                                 (response-filter request)
+                                                (assoc!-string-body)
                                                 (persistent!))))
                         (persistent!))]
       (try (store-request client app-name started processed)
