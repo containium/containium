@@ -21,7 +21,7 @@
                  ;[com.google.guava/guava "15.0"] ;; Cassandra still requires Guava 15
                  [org.yaml/snakeyaml "1.15"] ; >=1.11 required by r18n, used by some of our apps
                  [org.xerial.snappy/snappy-java "1.1.1.6"]
-                 [org.elasticsearch/elasticsearch "1.7.3"]
+                 [org.elasticsearch/elasticsearch "1.7.6"]
                  [org.codehaus.groovy/groovy-all "2.4.0"] ;; To enable groovy scripts in ElasticSearch
                  [clojurewerkz/elastisch "2.1.0" :exclusions [clj-http]]
                  [org.scala-lang/scala-library "2.9.2"]
