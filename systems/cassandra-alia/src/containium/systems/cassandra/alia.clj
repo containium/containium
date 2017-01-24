@@ -5,6 +5,7 @@
 (ns containium.systems.cassandra.alia
   "The Alia 2 implementation of the Cassandra system."
   (:require [qbits.alia :as alia]
+            [qbits.alia.policy.reconnection :refer (constant-reconnection-policy)]
             [containium.systems :refer (require-system Startable Stoppable)]
             [containium.systems.config :as config :refer (Config)]
             [containium.systems.cassandra :refer (Cassandra cql-statements)]
@@ -84,6 +85,10 @@
   (reify Startable
     (start [_ systems]
       (let [config (config/get-config (require-system Config systems) config-key)
+            config (if-not (:reconnection-policy config)
+                     (assoc config :reconnection-policy (constant-reconnection-policy 5))
+                    ;else
+                     config)
             logger (require-system SystemLogger systems)
             _ (info logger "Starting Alia 2 system, using config:" config)
             cluster (alia/cluster config)
