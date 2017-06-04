@@ -33,6 +33,7 @@
                  ;; Enable if using containium.systems.ring.netty
                  ;; [boxure/netty-ring-adapter "0.4.7"]
                  [info.sunng/ring-jetty9-adapter "0.8.5"]
+                 [io.netty/netty "3.10.6.Final"]
                  [cc.qbits/alia "3.1.11"]
                  [org.apache.commons/commons-lang3 "3.4"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
